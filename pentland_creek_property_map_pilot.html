@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Biolinks Habitat Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
+<!-- Pre-processed data made by biolinks_data_builder.html; must sit in the same folder as this map -->
+<script src="biolinks_data.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f4f4f0; }
+  #map { position: absolute; inset: 0; background: #ffffff; }
+  .grey-imagery { filter: grayscale(1) contrast(1.05); }
+  .panel {
+    position: absolute; top: 12px; left: 56px; z-index: 1000; width: 310px; max-height: calc(100% - 40px); overflow-y: auto;
+    background: rgba(255,255,255,0.96); border-radius: 8px; padding: 10px 14px; box-sizing: border-box;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.25); font-size: 13px; line-height: 1.4;
+  }
+  .panel h1 { font-size: 15px; margin: 0 0 4px; }
+  .panel h2 { font-size: 13px; margin: 12px 0 4px; }
+  .muted { color: #555; }
+  .small { color: #666; font-size: 12px; }
+  .status { margin-top: 8px; font-weight: 600; }
+  .key { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+  .sw { width: 18px; height: 0; border-top: 3px solid; display: inline-block; flex: none; }
+  .fill { width: 14px; height: 12px; border-radius: 2px; display: inline-block; border: 1px solid rgba(0,0,0,0.3); flex: none; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; border: 1.5px solid #222; flex: none; }
+  .ctl { margin: 4px 0; }
+  .ctl label { margin-right: 8px; white-space: nowrap; }
+  select { font: inherit; max-width: 100%; }
+  .leaflet-popup-content { font-size: 13px; line-height: 1.4; }
+  .leaflet-popup-content h3 { font-size: 14px; margin: 0 0 4px; }
+  .leaflet-popup-content table { border-collapse: collapse; }
+  .leaflet-popup-content td { padding: 1px 8px 1px 0; vertical-align: top; }
+  .sp-list { max-height: 190px; overflow-y: auto; margin-top: 4px; border-top: 1px solid #eee; padding-top: 4px; }
+  .tag { font-size: 10.5px; font-weight: 600; border-radius: 3px; padding: 0 3px; margin-left: 3px; white-space: nowrap; }
+  .tag.intro { color: #b42318; background: #fde8e6; }
+  .tag.plant { color: #7a5a00; background: #fbf0cc; }
+  .tag.other { color: #555; background: #eee; }
+  .lf { color: #16809c; font-size: 11.5px; }
+  .chips span { display: inline-block; background: #e6f3f5; color: #0b4f6c; border-radius: 10px; padding: 0 7px; margin: 2px 3px 0 0; font-size: 11.5px; }
+  .sec { margin-top: 8px; border-top: 1px solid #ddd; padding-top: 6px; }
+  .err { color: #b42318; font-weight: 600; }
+  @media (max-width: 600px) { .panel { left: 16px; right: 16px; top: auto; bottom: 24px; width: auto; max-height: 45%; } }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="panel">
+  <button id="toggle" style="float:right;font:inherit;font-size:12px;cursor:pointer">Hide</button>
+  <h1>Native understorey &amp; habitat by parcel</h1>
+  <div id="panelBody">
+  <div class="muted" id="intro">Loading…</div>
+
+  <h2>Colour parcels and roadsides by</h2>
+  <div class="ctl">
+    <select id="countMode">
+      <option value="lf">Native understorey plant groups (habitat intactness)</option>
+      <option value="und">Native understorey species</option>
+      <option value="all">All plant species</option>
+      <option value="intro">Introduced species</option>
+    </select>
+  </div>
+  <div class="ctl">Show colour on:
+    <label><input type="radio" name="shade" value="veg" checked> native veg in parcel</label>
+    <label><input type="radio" name="shade" value="parcel"> whole parcel</label>
+  </div>
+  <div id="spLegend" class="small"></div>
+
+  <h2>Boundaries &amp; records <span class="small">– off by default</span></h2>
+  <div class="key"><span class="sw" style="border-color:#262626;border-top-width:2px"></span> Property (rateable assessment)</div>
+  <div class="key"><span class="sw" style="border-color:#7a7a7a;border-top-width:1px"></span> Parcel (lot / Crown allotment)</div>
+  <div class="key"><span class="sw" style="border-color:#ff3b30;border-top-style:dashed"></span> Study area</div>
+  <div class="key"><span class="dot" style="background:#ffffff"></span> iNat record – native understorey</div>
+  <div class="key"><span class="dot" style="background:#9e9e9e"></span> iNat record – native tree, mistletoe or planted</div>
+  <div class="key"><span class="dot" style="background:#ff6b6b"></span> iNat record – introduced</div>
+
+  <h2>Native vegetation 2005 (EVC) <span class="small">– off by default</span></h2>
+  <div id="vegLegend" class="small"></div>
+
+  <div class="status" id="status">Loading data…</div>
+  <div class="small" id="notes" style="margin-top:6px"></div>
+  </div>
+</div>
+<script>
+const D = window.BIOLINKS_DATA;
+const status = document.getElementById('status');
+if (!D) {
+  status.innerHTML = '<span class="err">No data file found.</span>';
+  document.getElementById('intro').innerHTML = 'Open <b>biolinks_data_builder.html</b>, build the data, and save <b>biolinks_data.js</b> in the same folder as this map. Then reload this page.';
+  throw new Error('biolinks_data.js missing');
+}
+
+// ---------- Decode compact geometry (integer deltas at 1e-5 degrees) ----------
+function decodeGeom(enc) {
+  return { type: 'MultiPolygon', coordinates: enc.map(poly => poly.map(ring => {
+    const out = []; let x = 0, y = 0;
+    for (let i = 0; i < ring.length; i += 2) { x += ring[i]; y += ring[i + 1]; out.push([x / 1e5, y / 1e5]); }
+    return out;
+  })) };
+}
+const feat = (geom, props) => ({ type: 'Feature', geometry: geom, properties: props || {} });
+function bboxOverlap(a, b) { return !(a[0] > b[2] || a[2] < b[0] || a[1] > b[3] || a[3] < b[1]); }
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+const [W, S, E, N] = D.meta.bbox;
+const LF = D.lifeforms;
+const EXCL = new Set(D.excludedLifeforms);
+// taxa: id -> [name, common, lifeform, origin (N/I/P), understorey (1/0), source, isSpecies (1/0)]
+const T = D.taxa;
+
+// ---------- Units: parcels & roadside sections ----------
+const newStats = () => ({ obsCount: 0, all: new Map(), und: new Set(), intro: new Set(), lfs: new Set() });
+const parcels = D.parcels.map(([spi, pfi, road, ha, g], i) => {
+  const f = feat(decodeGeom(g)); return { i, spi, pfi, road, ha, feature: f, bbox: turf.bbox(f), stats: newStats() };
+});
+const roadsides = D.roadsides.map(([road, lengthM, ha, g], i) => {
+  const f = feat(decodeGeom(g)); return { i, road, lengthM, ha, feature: f, bbox: turf.bbox(f), stats: newStats() };
+});
+const props = D.props.map(([pfi, propnum, addrs, g]) => { const f = feat(decodeGeom(g)); return { pfi, propnum, addrs, feature: f, bbox: turf.bbox(f) }; });
+for (const o of D.obs) {
+  const [, , id, , , , , kind, idx] = o;
+  if (!kind) continue;
+  const u = kind === 1 ? parcels[idx] : roadsides[idx];
+  const t = T[id]; if (!t || !u) continue;
+  const s = u.stats; s.obsCount++;
+  if (t[4] && t[2] && !EXCL.has(t[2])) s.lfs.add(t[2]);   // plant groups also count genus-level IDs
+  if (!t[6]) continue;                                    // species counts need a species-level ID
+  const e = s.all.get(id) || { id, n: 0 }; e.n++; s.all.set(id, e);
+  if (t[4]) s.und.add(id);
+  if (t[3] === 'I') s.intro.add(id);
+}
+
+// ---------- Map ----------
+const map = L.map('map', { zoomControl: true });
+const imagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 19, opacity: 0.55, className: 'grey-imagery', attribution: 'Imagery © Esri, Maxar, Earthstar Geographics'
+}).addTo(map);
+// OpenStreetMap's own tile servers block pages opened from a local file, so use Esri / CARTO basemaps
+const topo = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Basemap © Esri and contributors' });
+const osm = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 19, subdomains: 'abcd', attribution: '© OpenStreetMap contributors © CARTO' });
+
+map.createPane('veg');     map.getPane('veg').style.zIndex = 380;
+map.createPane('species'); map.getPane('species').style.zIndex = 390;
+map.createPane('roads');   map.getPane('roads').style.zIndex = 395;
+map.createPane('lines');   map.getPane('lines').style.zIndex = 410;
+map.createPane('obs');     map.getPane('obs').style.zIndex = 620;
+// canvas drawing keeps tens of thousands of shapes responsive
+const cv = pane => L.canvas({ pane, padding: 0.3 });
+const canvasVeg = cv('veg'), canvasSp = cv('species'), canvasRd = cv('roads'), canvasLines = cv('lines'), canvasObs = cv('obs');
+
+const square = L.rectangle([[S, W], [N, E]], { color: '#ff3b30', weight: 2, dashArray: '6 6', fill: false, interactive: false }).addTo(map);
+map.fitBounds(square.getBounds(), { padding: [20, 20] });
+
+// ---------- Colour scales: yellow-green (low) to deep turquoise-blue (high) ----------
+const COLS = ['#d9ef7a', '#a6d96a', '#66c18f', '#2fa7a0', '#16809c', '#0b4f6c'];
+const BINS = {
+  lf: [[1, 1], [2, 2], [3, 3], [4, 5], [6, 7], [8, Infinity]],
+  sp: [[1, 1], [2, 3], [4, 6], [7, 10], [11, 20], [21, Infinity]]
+};
+const NO_RECORDS = '#e3cf9f';
+let countMode = 'lf', shadeMode = 'veg';
+const bins = () => countMode === 'lf' ? BINS.lf : BINS.sp;
+function count(u) {
+  const s = u.stats;
+  return countMode === 'lf' ? s.lfs.size : countMode === 'und' ? s.und.size : countMode === 'intro' ? s.intro.size : s.all.size;
+}
+function colour(n) { const b = bins(); for (let i = 0; i < b.length; i++) if (n >= b[i][0] && n <= b[i][1]) return COLS[i]; return COLS[COLS.length - 1]; }
+const NONE = { stats: newStats() };
+function unitStyle(f) {
+  const n = count(f.properties.u);
+  return n ? { color: colour(n), weight: 0.6, opacity: 1, fillColor: colour(n), fillOpacity: 0.85 }
+           : { color: '#a58a4f', weight: 0.5, opacity: 0.7, fillColor: NO_RECORDS, fillOpacity: 0.5 };
+}
+function roadStyle(f) {
+  const n = count(f.properties.u);
+  return n ? { color: colour(n), weight: 0.6, opacity: 1, fillColor: colour(n), fillOpacity: 0.8 }
+           : { color: '#a58a4f', weight: 0.4, opacity: 0.6, fillColor: NO_RECORDS, fillOpacity: 0.4 };
+}
+
+// ---------- Layers ----------
+const EVC_COLOURS = ['#1a9850', '#b8e186', '#8e6bbf', '#f28e2b', '#e7298a', '#4dac26', '#8c510a', '#80cdc1', '#c51b7d', '#fee08b', '#7570b3', '#d95f02'];
+const evcN = D.evcs.map(() => 0), evcColour = {};
+const vegFeats = D.veg.map(([e, g]) => (evcN[e]++, feat(decodeGeom(g), { e })));
+D.evcs.map((e, i) => i).sort((a, b) => evcN[b] - evcN[a]).forEach((i, k) => evcColour[i] = EVC_COLOURS[k % EVC_COLOURS.length]);
+const vegLayer = L.geoJSON({ type: 'FeatureCollection', features: vegFeats }, {
+  renderer: canvasVeg, interactive: false,
+  style: f => ({ color: evcColour[f.properties.e], weight: 0.5, opacity: 0.9, fillColor: evcColour[f.properties.e], fillOpacity: 0.65 })
+});
+const speciesLayer = L.geoJSON(null, { renderer: canvasSp, interactive: false, style: unitStyle }).addTo(map);
+const roadsideLayer = L.geoJSON({ type: 'FeatureCollection', features: roadsides.map(r => feat(r.feature.geometry, { u: r })) },
+  { renderer: canvasRd, interactive: false, style: roadStyle }).addTo(map);
+const parcelLayer = L.geoJSON({ type: 'FeatureCollection', features: parcels.map(p => p.feature) },
+  { renderer: canvasLines, interactive: false, style: { color: '#7a7a7a', weight: 0.8, opacity: 0.9, fill: false } });
+const propertyLayer = L.geoJSON({ type: 'FeatureCollection', features: props.map(p => p.feature) },
+  { renderer: canvasLines, interactive: false, style: { color: '#262626', weight: 2, opacity: 0.9, fill: false } });
+
+function tags(t) {
+  return (t[3] === 'I' ? '<span class="tag intro">INTRODUCED</span>' : '') +
+         (t[3] === 'P' ? '<span class="tag plant">PLANTED / NOT LOCAL</span>' : '') +
+         (t[3] === 'N' && !t[4] ? '<span class="tag other">' + (t[2] === 'TREE' ? 'TREE' : t[2] === 'MIS' ? 'MISTLETOE' : 'NOT UNDERSTOREY') + '</span>' : '') +
+         (t[5] === 'unclassified' ? '<span class="tag other">UNCLASSIFIED</span>' : '');
+}
+const obsLayer = L.layerGroup();
+for (const [x, y, id, , date, rg, obsId] of D.obs) {
+  const t = T[id] || ['Unknown', '', '', 'N', 0, 'unclassified', 0];
+  const fill = t[3] === 'I' ? '#ff6b6b' : t[4] ? '#ffffff' : '#9e9e9e';
+  L.circleMarker([y, x], { renderer: canvasObs, radius: 4, color: '#222', weight: 1.2, fillColor: fill, fillOpacity: 1, bubblingMouseEvents: false })
+    .bindPopup(() => '<i>' + esc(t[0]) + '</i>' + (t[1] ? ' – ' + esc(t[1]) : '') + tags(t) +
+      (t[2] ? '<div class="lf">' + esc(LF[t[2]]) + '</div>' : '<br>') +
+      '<span class="small">' + esc(date) + ' · ' + (rg ? 'Research grade' : 'Needs ID') + '</span><br>' +
+      '<a href="https://www.inaturalist.org/observations/' + obsId + '" target="_blank" rel="noopener">Open on iNaturalist</a>')
+    .addTo(obsLayer);
+}
+
+L.control.layers(
+  { 'Satellite imagery': imagery, 'Topographic (Esri)': topo, 'Street map (OSM / CARTO)': osm },
+  { 'Plants per parcel': speciesLayer, 'Plants per roadside section': roadsideLayer, 'iNat plant records': obsLayer,
+    'Properties': propertyLayer, 'Parcels': parcelLayer, 'Native vegetation 2005 (EVC)': vegLayer, 'Study area': square },
+  { collapsed: true }
+).addTo(map);
+L.control.scale({ imperial: false }).addTo(map);
+
+function vegPiecesOf(p) {
+  const pv = D.parcelVeg[p.i];
+  if (pv && !p._veg) p._veg = pv[1].map(decodeGeom);
+  return p._veg || [];
+}
+function buildSpeciesLayer() {
+  speciesLayer.clearLayers();
+  const feats = [];
+  if (shadeMode === 'parcel') {
+    for (const p of parcels) feats.push(feat(p.feature.geometry, { u: p }));
+  } else {
+    for (const v of vegFeats) feats.push(feat(v.geometry, { u: NONE }));                 // base: all native veg as 'no records'
+    for (const p of parcels) if (p.stats.obsCount) for (const g of vegPiecesOf(p)) feats.push(feat(g, { u: p }));
+  }
+  speciesLayer.addData({ type: 'FeatureCollection', features: feats });
+  updateLegend();
+}
+const modeLabel = () => ({ lf: 'understorey plant groups', und: 'native understorey species', all: 'plant species', intro: 'introduced species' }[countMode]);
+function updateLegend() {
+  const label = modeLabel();
+  const pc = parcels.map(count), rc = roadsides.map(count);
+  const max = Math.max(0, ...pc, ...rc);
+  document.getElementById('spLegend').innerHTML =
+    bins().filter(b => b[0] <= Math.max(max, 1)).map((b, i) =>
+      '<div class="key"><span class="fill" style="background:' + COLS[i] + '"></span>' +
+      (b[1] === Infinity ? b[0] + '+' : b[0] === b[1] ? b[0] : b[0] + '–' + b[1]) + ' ' + label + '</div>').join('') +
+    '<div class="key"><span class="fill" style="background:' + NO_RECORDS + '"></span>No records (not surveyed ≠ no plants)</div>' +
+    (countMode === 'lf' ? '<div style="margin-top:4px">Plant groups follow Habitat Hectares lifeforms (shrubs, herbs, grasses, ferns, climbers…). Canopy trees, mistletoe, introduced and planted species are left out.</div>' : '') +
+    '<div style="margin-top:4px">' + pc.filter(n => n).length + ' of ' + parcels.length.toLocaleString() + ' parcels and ' + rc.filter(n => n).length + ' of ' + roadsides.length.toLocaleString() +
+    ' roadside sections have records · max ' + max + ' in one place</div>';
+}
+
+// ---------- Popups ----------
+function statsHtml(s) {
+  let h = '<tr><td>iNat plant records</td><td>' + s.obsCount + '</td></tr>' +
+    '<tr><td>Understorey plant groups</td><td><b>' + s.lfs.size + '</b></td></tr>' +
+    '<tr><td>Native understorey species</td><td><b>' + s.und.size + '</b></td></tr>' +
+    '<tr><td>All plant species</td><td>' + s.all.size + ' (' + s.intro.size + ' introduced)</td></tr></table>';
+  if (s.lfs.size) h += '<div class="chips">' + [...s.lfs].map(c => '<span>' + esc(LF[c]) + '</span>').join('') + '</div>';
+  if (s.all.size) {
+    const rows = [...s.all.values()].map(e => ({ e, t: T[e.id] }))
+      .sort((a, b) => (b.t[4] - a.t[4]) || ((a.t[3] === 'I') - (b.t[3] === 'I')) || a.t[0].localeCompare(b.t[0]));
+    h += '<div class="sp-list">' + rows.map(({ e, t }) =>
+      '<div><a href="https://www.inaturalist.org/taxa/' + e.id + '" target="_blank" rel="noopener"><i>' + esc(t[0]) + '</i></a>' +
+      (t[1] ? ' – ' + esc(t[1]) : '') + tags(t) + ' <span class="small">×' + e.n + '</span>' +
+      (t[2] ? ' <span class="lf">' + esc(LF[t[2]]) + '</span>' : '') + '</div>').join('') + '</div>';
+  }
+  return h;
+}
+const vegHaCache = {};
+function vegHa(p) {
+  if (D.parcelVeg[p.i]) return D.parcelVeg[p.i][0];
+  if (p.i in vegHaCache) return vegHaCache[p.i];
+  let ha = 0;
+  for (const v of vegFeats) {
+    v._b = v._b || turf.bbox(v);
+    if (!bboxOverlap(p.bbox, v._b)) continue;
+    try { const x = turf.intersect(p.feature, v); if (x) ha += turf.area(x) / 10000; } catch (e) {}
+  }
+  return (vegHaCache[p.i] = ha);
+}
+map.on('click', e => {
+  const c = [e.latlng.lng, e.latlng.lat], pt = turf.point(c), cb = [c[0], c[1], c[0], c[1]];
+  const hit = arr => arr.find(u => bboxOverlap(u.bbox, cb) && turf.booleanPointInPolygon(pt, u.feature));
+  const parcel = hit(parcels);
+  const road = parcel ? null : hit(roadsides);
+  const prop = parcel ? hit(props) : null;
+  let html = '';
+  if (road) {
+    html += '<h3>Roadside: ' + esc(road.road) + '</h3><table>' +
+      (road.lengthM ? '<tr><td>Section length</td><td>~' + Math.round(road.lengthM / 10) * 10 + ' m</td></tr>' : '') +
+      '<tr><td>Reserve area</td><td>' + road.ha.toFixed(2) + ' ha</td></tr>' + statsHtml(road.stats);
+  }
+  if (parcel) {
+    const vh = vegHa(parcel);
+    html += '<h3>Parcel ' + esc(parcel.spi || parcel.pfi) + (parcel.road ? ' <span class="small">(road)</span>' : '') + '</h3><table>' +
+      '<tr><td>Area</td><td>' + parcel.ha.toFixed(1) + ' ha</td></tr>' +
+      '<tr><td>Native veg (2005)</td><td>' + vh.toFixed(1) + ' ha (' + Math.round(100 * vh / parcel.ha) + '%)</td></tr>' + statsHtml(parcel.stats);
+  }
+  if (prop) {
+    html += '<div class="sec"><b>Property:</b> ' + esc(prop.addrs[0] || 'No address recorded') +
+      (prop.addrs.length > 1 ? ' <span class="small">+' + (prop.addrs.length - 1) + ' more</span>' : '') +
+      '<br><span class="small">' + (turf.area(prop.feature) / 10000).toFixed(1) + ' ha · council prop. no. ' + esc(prop.propnum || '—') + ' · PFI ' + esc(prop.pfi) + '</span></div>';
+  }
+  if (html) L.popup({ minWidth: 300, maxWidth: 400 }).setLatLng(e.latlng).setContent(html).openOn(map);
+});
+
+// ---------- Panel text ----------
+const m = D.meta, built = new Date(m.built);
+document.getElementById('intro').innerHTML = m.sizeKm + ' × ' + m.sizeKm + ' km area · data built ' +
+  built.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) + '. Click anywhere for parcel, roadside and property details.';
+document.getElementById('vegLegend').innerHTML = D.evcs.map((e, i) => [e, i]).sort((a, b) => evcN[b[1]] - evcN[a[1]]).map(([e, i]) =>
+  '<div class="key"><span class="fill" style="background:' + evcColour[i] + '"></span><span>' + esc(e[0]) +
+  ' <span class="small">EVC ' + e[1] + (e[2].length ? ' · ' + esc(e[2].join(' / ')) : '') + '</span></span></div>').join('') +
+  '<div style="margin-top:4px">Turn on in the layer menu (top right). Mapped at 1:100,000 – check on the ground.</div>';
+const placedP = D.obs.filter(o => o[7] === 1).length, placedR = D.obs.filter(o => o[7] === 2).length;
+document.getElementById('notes').innerHTML =
+  placedP + ' records fall in parcels and ' + placedR + ' on roadside sections' + (m.counts.unplaced ? ' (' + m.counts.unplaced + ' elsewhere)' : '') + '. ' +
+  'Left out: records with hidden locations (including many threatened orchids) and ' + m.counts.coarse + ' with GPS accuracy worse than 200 m. ' +
+  'Native / introduced / plant group come from the understorey lookup (' + esc(m.lookup) + '). Re-run the builder to pick up new iNat records.';
+buildSpeciesLayer();
+status.textContent = parcels.length.toLocaleString() + ' parcels · ' + roadsides.length.toLocaleString() + ' roadside sections · ' + D.obs.length.toLocaleString() + ' iNat plant records';
+status.style.color = '#1a7f37';
+
+document.getElementById('toggle').addEventListener('click', e => { const b = document.getElementById('panelBody'); const hide = b.style.display !== 'none'; b.style.display = hide ? 'none' : ''; e.target.textContent = hide ? 'Show' : 'Hide'; });
+document.getElementById('countMode').addEventListener('change', e => { countMode = e.target.value; speciesLayer.setStyle(unitStyle); roadsideLayer.setStyle(roadStyle); updateLegend(); });
+document.querySelectorAll('input[name=shade]').forEach(r => r.addEventListener('change', e => { shadeMode = e.target.value; buildSpeciesLayer(); }));
+</script>
+</body>
+</html>

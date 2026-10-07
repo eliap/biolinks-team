@@ -1,0 +1,8 @@
+# local only
+.venv/
+cache/
+__pycache__/
+*.tmp
+build_full.log
+HANDOFF.md
+*.pdf

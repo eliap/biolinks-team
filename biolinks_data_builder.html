@@ -1,0 +1,447 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Biolinks Data Builder</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
+<style>
+  :root { --bg: #f6f5f0; --card: #ffffff; --ink: #1f2420; --muted: #5d655f; --line: #dcdcd4; --accent: #16809c; --ok: #1a7f37; --bad: #b42318; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 60px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 0 0 8px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-top: 16px; }
+  .muted { color: var(--muted); }
+  label { display: block; margin: 6px 0; }
+  input[type=number] { width: 120px; font: inherit; padding: 3px 6px; }
+  button { font: inherit; padding: 8px 16px; border-radius: 6px; border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+  button.secondary { background: #fff; color: var(--accent); }
+  button:disabled { opacity: 0.5; cursor: default; }
+  #log { font: 12.5px/1.5 ui-monospace, Consolas, monospace; background: #fbfbf8; border: 1px solid var(--line); border-radius: 6px; padding: 10px; max-height: 320px; overflow-y: auto; white-space: pre-wrap; }
+  .bar { height: 8px; background: #e8e8e0; border-radius: 4px; overflow: hidden; margin: 8px 0; }
+  .bar > div { height: 100%; width: 0; background: var(--accent); transition: width 0.2s; }
+  table { border-collapse: collapse; width: 100%; }
+  td { padding: 3px 8px 3px 0; border-bottom: 1px solid #eee; }
+  td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+  .ok { color: var(--ok); font-weight: 600; } .bad { color: var(--bad); font-weight: 600; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Biolinks data builder</h1>
+  <div class="muted">Downloads property, parcel, road and native vegetation data (Vicmap, DEECA) and iNaturalist plant records, works out
+    plant species and understorey plant groups for every parcel and roadside section, and saves the result as
+    <b>biolinks_data.js</b>. Save that file in the same folder as the map (<b>pentland_creek_property_map.html</b>), then open the map.</div>
+
+  <div class="card">
+    <h2>1. Area</h2>
+    <label>Centre latitude <input type="number" id="lat" step="0.000001" value="-37.214978"></label>
+    <label>Centre longitude <input type="number" id="lng" step="0.000001" value="142.797641"></label>
+    <label>Square size (km) <input type="number" id="size" step="1" min="1" value="15"></label>
+  </div>
+
+  <div class="card">
+    <h2>2. Understorey lookup <span class="muted">(optional)</span></h2>
+    <div class="muted">A built-in list classifies the plants recorded so far. If you've edited <b>understorey_lookup.csv</b>, load it here and it will be used instead.</div>
+    <label><input type="file" id="lookupFile" accept=".csv"> <span id="lookupStatus" class="muted">Using built-in list (248 taxa)</span></label>
+  </div>
+
+  <div class="card">
+    <h2>3. Build</h2>
+    <button id="go">Build data file</button>
+    <div class="bar"><div id="bar"></div></div>
+    <div id="log">Ready.</div>
+  </div>
+
+  <div class="card" id="resultCard" style="display:none">
+    <h2>4. Save</h2>
+    <table id="summary"></table>
+    <p style="margin-top:12px">
+      <button id="save">Save biolinks_data.js…</button>
+      <button id="saveNew" class="secondary" style="display:none">Download unclassified plants (CSV)</button>
+    </p>
+    <div class="muted" id="saveNote">Save it in the same folder as the map, replacing any older copy.</div>
+  </div>
+</main>
+
+<script>
+// ---------------- Built-in understorey lookup ----------------
+const LOOKUP = {"lifeforms":{"TREE":"Canopy tree","UTLS":"Understorey tree or large shrub","MS":"Medium shrub","SS":"Small or prostrate shrub","LH":"Large herb","MH":"Medium herb","SPH":"Small or prostrate herb","LTG":"Large tufted graminoid","MTG":"Medium to tiny tufted graminoid","NTG":"Non-tufted graminoid","GF":"Ground fern","SCC":"Scrambler or climber","BRY":"Bryophyte or liverwort","AQ":"Aquatic herb","MIS":"Mistletoe"},"excluded":["TREE","MIS"],"taxa":{"83357":["Glossodia major","MH","N","Y"],"553092":["Diuris chryseopsis","MH","N","Y"],"321090":["Caladenia carnea","MH","N","Y"],"516646":["Diuris pardina","MH","N","Y"],"487293":["Pterostylis nana","SPH","N","Y"],"75251":["Acacia paradoxa","MS","N","Y"],"516622":["Caladenia parva","MH","N","Y"],"557987":["Pelargonium rodneyanum","MH","N","Y"],"1391984":["Stenanthera conostephioides","SS","N","Y"],"323935":["Thelymitra antennifera","MH","N","Y"],"1138706":["Arthropodium strictum","MH","N","Y"],"83571":["Bursaria spinosa","UTLS","N","Y"],"155215":["Corybas incurvus","SPH","N","Y"],"210147":["Brachyloma daphnoides","SS","N","Y"],"504086":["Wurmbea dioica","SPH","N","Y"],"210175":["Dianella revoluta","MH","N","Y"],"323889":["Pimelea humilis","SS","N","Y"],"323900":["Pheladenia deformis","SPH","N","Y"],"403386":["Leptorhynchos squamatus","MH","N","Y"],"552476":["Cyanicula caerulea","SPH","N","Y"],"823782":["Drosera gunniana","MH","N","Y"],"56024":["Arctotheca calendula","SPH","I","N"],"83628":["Burchardia umbellata","MH","N","Y"],"194766":["Chamaescilla corymbosa","SPH","N","Y"],"244345":["Chrysocephalum apiculatum","MH","N","Y"],"323904":["Cyrtostylis reniformis","SPH","N","Y"],"353933":["Ozothamnus obcordatus","MS","N","Y"],"369421":["Caladenia fuscata","SPH","N","Y"],"516738":["Bulbine bulbosa","MH","N","Y"],"570398":["Caladenia ornata","SPH","N","Y"],"1391449":["Styphelia humifusa","SS","N","Y"],"1546152":["Gaudium myrsinoides","MS","N","Y"],"140424":["Pterostylis concinna","SPH","N","Y"],"323860":["Pultenaea pedunculata","SS","N","Y"],"564892":["Dillwynia hispida","SS","N","Y"],"133274":["Banksia marginata","UTLS","N","Y"],"323830":["Leucopogon virgatus","SS","N","Y"],"328055":["Diuris orientis","MH","N","Y"],"411301":["Grevillea alpina","MS","N","Y"],"421601":["Brunonia australis","MH","N","Y"],"424565":["Drosera auriculata","MH","N","Y"],"474399":["Caladenia tentaculata","MH","N","Y"],"555356":["Pterostylis striata","MH","N","Y"],"556568":["Pimelea curviflora","SS","N","Y"],"713917":["Drosera planchonii","MH","N","Y"],"774098":["Pauridia vaginata","SPH","N","Y"],"68286":["Polytrichum juniperinum","BRY","N","Y"],"75253":["Acacia pycnantha","UTLS","N","Y"],"83366":["Tetratheca ciliata","SS","N","Y"],"83369":["Calochilus robertsonii","MH","N","Y"],"83527":["Lissanthe strigosa","SS","N","Y"],"148240":["Eriochilus cucullatus","SPH","N","Y"],"323868":["Stackhousia monogyna","MH","N","Y"],"323937":["Thysanotus patersonii","SCC","N","Y"],"353868":["Oxalis perennans","SPH","N","Y"],"559051":["Pultenaea largiflorens","MS","N","Y"],"568074":["Amyema quandang","MIS","N","N"],"1235070":["Pterostylis ampliata","MH","N","Y"],"53104":["Hypochaeris radicata","MH","I","N"],"57168":["Eragrostis","MTG","N","Y"],"122323":["Allocasuarina verticillata","UTLS","N","Y"],"131651":["Wahlenbergia stricta","MH","N","Y"],"143292":["Drosera aberrans","SPH","N","Y"],"143356":["Kennedia prostrata","SCC","N","Y"],"208571":["Themeda triandra","LTG","N","Y"],"210345":["Gonocarpus tetragynus","SPH","N","Y"],"210349":["Hibbertia riparia","SS","N","Y"],"323950":["Cheilanthes austrotenuifolia","GF","N","Y"],"421578":["Goodenia geniculata","SPH","N","Y"],"516247":["Thelymitra rubra","MH","N","Y"],"560601":["Acacia aculeatissima","SS","N","Y"],"777416":["Amyema preissii","MIS","N","N"],"956768":["Hyalosperma praecox","SPH","N","Y"],"1154539":["Diuris \u00d7 palachila","MH","N","Y"],"53103":["Hypochaeris glabra","SPH","I","N"],"53178":["Plantago lanceolata","MH","I","N"],"53195":["Rumex acetosella","SPH","I","N"],"57076":["Trifolium campestre","SPH","I","N"],"57090":["Erodium botrys","SPH","I","N"],"57157":["Briza maxima","MTG","I","N"],"58991":["Portulaca oleracea","SPH","N","Y"],"61058":["Aira praecox","MTG","I","N"],"68896":["Romulea rosea","SPH","I","N"],"76435":["Coprosma repens","MS","I","N"],"77262":["Geranium solanderi","SPH","N","Y"],"162754":["Eucalyptus goniocalyx","TREE","N","N"],"210124":["Xerochrysum viscosum","MH","N","Y"],"210184":["Hardenbergia violacea","SCC","N","Y"],"210185":["Acacia gunnii","SS","N","Y"],"320929":["Hakea decurrens","MS","N","Y"],"321125":["Comesperma volubile","SCC","N","Y"],"321216":["Pterostylis nutans","MH","N","Y"],"323796":["Acrotriche serrulata","SS","N","Y"],"323854":["Platylobium obtusangulum","SS","N","Y"],"323928":["Pyrorchis nigricans","SPH","N","Y"],"339974":["Eucalyptus leucoxylon","TREE","N","N"],"342016":["Plantago bellardii","SPH","I","N"],"406523":["Thelymitra megacalyptra","MH","N","Y"],"406989":["Vittadinia gracilis","MH","N","Y"],"482401":["Cycnogeton procerus","AQ","N","Y"],"518360":["Banksia gardneri","SS","P","N"],"520337":["Daviesia leptophylla","MS","N","Y"],"526700":["Convolvulus angustissimus","SCC","N","Y"],"557454":["Thelymitra luteocilium","MH","N","Y"],"567945":["Thelymitra \u00d7 macmillanii","MH","N","Y"],"577966":["Neurachne alopecuroidea","MTG","N","Y"],"748411":["Pauridia glabella","SPH","N","Y"],"769918":["Hackelia suaveolens","MH","N","Y"],"823796":["Hovea heterophylla","SS","N","Y"],"856072":["Hibbertia australis","SS","N","Y"],"916652":["Wahlenbergia capillaris","MH","N","Y"],"1091371":["Leptodontium paradoxum","BRY","N","Y"],"1132139":["Microseris walteri","MH","N","Y"],"1270120":["Goodenia paradoxa","SPH","N","Y"],"47406":["Spartium junceum","MS","I","N"],"47563":["Nerium oleander","MS","I","N"],"47687":["Erodium cicutarium","SPH","I","N"],"50853":["Cerastium","SPH","I","N"],"52697":["Avena","MTG","I","N"],"52702":["Bromus diandrus","MTG","I","N"],"52703":["Bromus hordeaceus","MTG","I","N"],"52720":["Dactylis glomerata","LTG","I","N"],"52764":["Prunella vulgaris","SPH","I","N"],"52793":["Holcus lanatus","MTG","I","N"],"52796":["Hordeum murinum","MTG","I","N"],"52990":["Carduus pycnocephalus","LH","I","N"],"53083":["Pseudognaphalium luteoalbum","SPH","N","Y"],"53344":["Acacia melanoxylon","UTLS","N","Y"],"54141":["Tragopogon porrifolius","MH","I","N"],"55829":["Cardamine hirsuta","SPH","I","N"],"56077":["Hypericum perforatum","MH","I","N"],"56236":["Centaurium erythraea","SPH","I","N"],"56289":["Targionia hypophylla","BRY","N","Y"],"57092":["Erodium moschatum","SPH","I","N"],"57162":["Briza minor","MTG","I","N"],"57188":["Phalaris aquatica","LTG","I","N"],"58202":["Malva parviflora","MH","I","N"],"58207":["Eucalyptus polyanthemos","TREE","N","N"],"60201":["Trifolium subterraneum","SPH","I","N"],"60350":["Artemisia absinthium","MS","I","N"],"63379":["Acacia longifolia","UTLS","P","N"],"64107":["Asparagus asparagoides","SCC","I","N"],"64128":["Eucalyptus camaldulensis","TREE","N","N"],"69939":["Trifolium angustifolium","SPH","I","N"],"75256":["Acaena novae-zelandiae","SPH","N","Y"],"75387":["Alyogyne huegelii","MS","P","N"],"75868":["Brassica fruticulosa","MH","I","N"],"76462":["Cotyledon orbiculata","SS","I","N"],"77902":["Lycium barbarum","MS","I","N"],"78954":["Salpichroa origanifolia","SCC","I","N"],"79032":["Sedum praealtum","SS","I","N"],"79052":["Senecio quadridentatus","MH","N","Y"],"79408":["Trifolium arvense","SPH","I","N"],"83359":["Thelymitra ixioides","MH","N","Y"],"83364":["Indigofera australis","MS","N","Y"],"83400":["Pterostylis curta","MH","N","Y"],"83626":["Calytrix tetragona","MS","N","Y"],"118443":["Geranium retrorsum","SPH","N","Y"],"125125":["Xanthorrhoea australis","LTG","N","Y"],"128763":["Acacia genistifolia","MS","N","Y"],"128978":["Callitris rhomboidea","UTLS","N","Y"],"130289":["Campylopus introflexus","BRY","N","Y"],"131642":["Banksia ericifolia","MS","P","N"],"142875":["Austrostipa oligostachya","MTG","N","Y"],"157549":["Haloragis","SPH","N","Y"],"163969":["Hypericum gramineum","SPH","N","Y"],"163992":["Hypnum cupressiforme","BRY","N","Y"],"164711":["Lolium rigidum","MTG","I","N"],"178212":["Exocarpos cupressiformis","UTLS","N","Y"],"181597":["Ixia polystachia","MH","I","N"],"200064":["Parietaria debilis","SPH","N","Y"],"207906":["Eucalyptus melliodora","TREE","N","N"],"208167":["Eucalyptus aromaphloia","TREE","N","N"],"209397":["Tricoryne elatior","MH","N","Y"],"209475":["Acacia implexa","UTLS","N","Y"],"210141":["Ajuga australis","MH","N","Y"],"210152":["Hydrocotyle laxiflora","SPH","N","Y"],"210177":["Schoenus apogon","MTG","N","Y"],"210350":["Eucalyptus dives","TREE","N","N"],"243498":["Myriophyllum crispatum","AQ","N","Y"],"320090":["Austrocylindropuntia cylindrica","MS","I","N"],"321064":["Acacia myrtifolia","MS","N","Y"],"321091":["Clematis aristata","SCC","N","Y"],"323294":["Melaleuca squarrosa","UTLS","N","Y"],"323786":["Allocasuarina littoralis","UTLS","N","Y"],"323815":["Clematis microphylla","SCC","N","Y"],"323840":["Myoporum insulare","UTLS","P","N"],"325101":["Opuntia puberula","MS","I","N"],"334810":["Hibbertia stricta","SS","N","Y"],"344664":["Eryngium vesiculosum","SPH","N","Y"],"353940":["Cymbonotus preissianus","SPH","N","Y"],"353958":["Microtis unifolia","MH","N","Y"],"353967":["Caesia calliantha","MH","N","Y"],"400104":["Breutelia affinis","BRY","N","Y"],"402866":["Juncus subsecundus","MTG","N","Y"],"403926":["Microtis arenaria","MH","N","Y"],"410347":["Hakea laurina","UTLS","P","N"],"417787":["Calochilus campestris","MH","N","Y"],"421570":["Goodenia blackiana","MH","N","Y"],"421598":["Goodenia pinnatifida","SPH","N","Y"],"470757":["Calocephalus citreus","MH","N","Y"],"472022":["Acacia prominens","UTLS","P","N"],"475002":["Disa bracteata","MH","I","N"],"481616":["Xanthorrhoea semiplana","LTG","N","Y"],"481934":["Amyema miquelii","MIS","N","N"],"485275":["Isopogon ceratophyllus","SS","N","Y"],"502257":["Hakea rostrata","MS","N","Y"],"511241":["Millotia myosotidifolia","SPH","N","Y"],"511256":["Podolepis","MH","N","Y"],"516250":["Caladenia pusilla","SPH","N","Y"],"516379":["Asperula conferta","SPH","N","Y"],"516647":["Pterostylis melagramma","MH","N","Y"],"520478":["Eutaxia microphylla","SS","N","Y"],"526704":["Gonocarpus elatus","MH","N","Y"],"548756":["Hakea petiolaris","UTLS","P","N"],"553104":["Diuris behrii","MH","N","Y"],"553155":["Hibbertia crinita","SS","N","Y"],"553187":["Caladenia clavigera","MH","N","Y"],"557906":["Caladenia cucullata","MH","N","Y"],"558111":["Prasophyllum maccannii","MH","N","Y"],"558112":["Eryngium ovinum","MH","N","Y"],"566532":["Senecio odoratus","MS","N","Y"],"577590":["Myriocephalus rhizocephalus","SPH","N","Y"],"577969":["Senecio picridioides","MH","N","Y"],"589718":["Melaleuca parvistaminea","UTLS","N","Y"],"596690":["Melaleuca linearis","MS","P","N"],"634652":["Ozothamnus pholidotus","SS","N","Y"],"708211":["Caladenia mentiens","SPH","N","Y"],"709692":["Wurmbea latifolia","SPH","N","Y"],"779425":["Allittia uliginosa","SPH","N","Y"],"790420":["Thelymitra peniculata","MH","N","Y"],"791928":["Lysimachia arvensis","SPH","I","N"],"793457":["Stackhousia subterranea","SPH","N","Y"],"801140":["Melaleuca paludicola","MS","N","Y"],"836494":["Chorizandra enodis","NTG","N","Y"],"862413":["Lomandra nana","MTG","N","Y"],"874298":["Millotia tenuifolia","SPH","N","Y"],"891423":["Platysace heterophylla","SPH","N","Y"],"940794":["Plantago gaudichaudii","SPH","N","Y"],"957534":["Lepidosperma carphoides","MTG","N","Y"],"959916":["Austrostipa elegantissima","SCC","N","Y"],"1033225":["Grevillea arenaria","MS","P","N"],"1148231":["Rytidosperma indutum","MTG","N","Y"],"1168854":["Lepidosperma laeve","NTG","N","Y"],"1377227":["Festuca ambigua","MTG","I","N"],"1511481":["Rubigineae","MS","I","N"],"1515467":["Hesperocyparis glabra","TREE","I","N"],"1685275":["Thelymitra serpentina","MH","N","Y"]},"genus":{"Glossodia":["MH","N"],"Diuris":["MH","N"],"Pelargonium":["MH","N"],"Stenanthera":["SS","N"],"Thelymitra":["MH","N"],"Arthropodium":["MH","N"],"Bursaria":["UTLS","N"],"Corybas":["SPH","N"],"Brachyloma":["SS","N"],"Wurmbea":["SPH","N"],"Dianella":["MH","N"],"Pimelea":["SS","N"],"Pheladenia":["SPH","N"],"Leptorhynchos":["MH","N"],"Cyanicula":["SPH","N"],"Arctotheca":["SPH","I"],"Burchardia":["MH","N"],"Chamaescilla":["SPH","N"],"Chrysocephalum":["MH","N"],"Cyrtostylis":["SPH","N"],"Bulbine":["MH","N"],"Styphelia":["SS","N"],"Gaudium":["MS","N"],"Dillwynia":["SS","N"],"Leucopogon":["SS","N"],"Brunonia":["MH","N"],"Pauridia":["SPH","N"],"Polytrichum":["BRY","N"],"Tetratheca":["SS","N"],"Calochilus":["MH","N"],"Lissanthe":["SS","N"],"Eriochilus":["SPH","N"],"Thysanotus":["SCC","N"],"Oxalis":["SPH","N"],"Amyema":["MIS","N"],"Eragrostis":["MTG","N"],"Allocasuarina":["UTLS","N"],"Wahlenbergia":["MH","N"],"Kennedia":["SCC","N"],"Themeda":["LTG","N"],"Hibbertia":["SS","N"],"Cheilanthes":["GF","N"],"Hyalosperma":["SPH","N"],"Rumex":["SPH","I"],"Trifolium":["SPH","I"],"Erodium":["SPH","I"],"Briza":["MTG","I"],"Portulaca":["SPH","N"],"Aira":["MTG","I"],"Romulea":["SPH","I"],"Coprosma":["MS","I"],"Geranium":["SPH","N"],"Eucalyptus":["TREE","N"],"Xerochrysum":["MH","N"],"Hardenbergia":["SCC","N"],"Comesperma":["SCC","N"],"Acrotriche":["SS","N"],"Platylobium":["SS","N"],"Pyrorchis":["SPH","N"],"Vittadinia":["MH","N"],"Cycnogeton":["AQ","N"],"Daviesia":["MS","N"],"Convolvulus":["SCC","N"],"Neurachne":["MTG","N"],"Hackelia":["MH","N"],"Hovea":["SS","N"],"Leptodontium":["BRY","N"],"Microseris":["MH","N"],"Spartium":["MS","I"],"Nerium":["MS","I"],"Cerastium":["SPH","I"],"Avena":["MTG","I"],"Bromus":["MTG","I"],"Dactylis":["LTG","I"],"Prunella":["SPH","I"],"Holcus":["MTG","I"],"Hordeum":["MTG","I"],"Carduus":["LH","I"],"Pseudognaphalium":["SPH","N"],"Tragopogon":["MH","I"],"Cardamine":["SPH","I"],"Centaurium":["SPH","I"],"Targionia":["BRY","N"],"Phalaris":["LTG","I"],"Malva":["MH","I"],"Artemisia":["MS","I"],"Asparagus":["SCC","I"],"Acaena":["SPH","N"],"Alyogyne":["MS","P"],"Brassica":["MH","I"],"Cotyledon":["SS","I"],"Lycium":["MS","I"],"Salpichroa":["SCC","I"],"Sedum":["SS","I"],"Indigofera":["MS","N"],"Calytrix":["MS","N"],"Xanthorrhoea":["LTG","N"],"Callitris":["UTLS","N"],"Campylopus":["BRY","N"],"Haloragis":["SPH","N"],"Hypnum":["BRY","N"],"Lolium":["MTG","I"],"Exocarpos":["UTLS","N"],"Ixia":["MH","I"],"Parietaria":["SPH","N"],"Tricoryne":["MH","N"],"Ajuga":["MH","N"],"Hydrocotyle":["SPH","N"],"Schoenus":["MTG","N"],"Myriophyllum":["AQ","N"],"Austrocylindropuntia":["MS","I"],"Clematis":["SCC","N"],"Myoporum":["UTLS","P"],"Opuntia":["MS","I"],"Cymbonotus":["SPH","N"],"Microtis":["MH","N"],"Caesia":["MH","N"],"Breutelia":["BRY","N"],"Juncus":["MTG","N"],"Calocephalus":["MH","N"],"Disa":["MH","I"],"Isopogon":["SS","N"],"Millotia":["SPH","N"],"Podolepis":["MH","N"],"Asperula":["SPH","N"],"Eutaxia":["SS","N"],"Prasophyllum":["MH","N"],"Myriocephalus":["SPH","N"],"Allittia":["SPH","N"],"Lysimachia":["SPH","I"],"Chorizandra":["NTG","N"],"Lomandra":["MTG","N"],"Platysace":["SPH","N"],"Rytidosperma":["MTG","N"],"Festuca":["MTG","I"],"Rubigineae":["MS","I"],"Hesperocyparis":["TREE","I"]}};
+let lookup = LOOKUP;
+
+// ---------------- Helpers ----------------
+const $ = id => document.getElementById(id);
+const logEl = $('log');
+function log(msg, cls) {
+  const line = document.createElement('div');
+  if (cls) line.className = cls;
+  line.textContent = new Date().toLocaleTimeString() + '  ' + msg;
+  if (logEl.textContent === 'Ready.') logEl.textContent = '';
+  logEl.appendChild(line); logEl.scrollTop = logEl.scrollHeight;
+}
+function progress(p) { $('bar').style.width = Math.round(p * 100) + '%'; }
+const tick = () => new Promise(r => setTimeout(r, 0));
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function bboxOverlap(a, b) { return !(a[0] > b[2] || a[2] < b[0] || a[1] > b[3] || a[3] < b[1]); }
+function safeIntersect(a, b) { try { return turf.intersect(a, b); } catch (e) { return null; } }
+function safeDiff(a, b) { try { return turf.difference(a, b); } catch (e) { return a; } }
+
+async function getJSON(url, tries = 4) {
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await fetch(url);
+      if (r.status === 429 || r.status >= 500) throw new Error('HTTP ' + r.status);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const t = await r.text();
+      try { return JSON.parse(t); } catch (e) { throw new Error('server error: ' + t.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 160)); }
+    } catch (e) {
+      if (i === tries - 1) throw e;
+      log('  retrying after error (' + e.message + ')…');
+      await sleep(3000 * (i + 1));
+    }
+  }
+}
+
+// ---------------- Data sources ----------------
+let W, S, E, N;
+const WFS = 'https://opendata.maps.vic.gov.au/geoserver/wfs';
+const WFS_SORT_KEY = { v_parcel_mp: 'parcel_pfi', v_property_mp: 'prop_pfi', address: 'pfi', road_casement_polygon: 'pfi', tr_road: 'ufi' };
+function wfsUrl(layer) {
+  return WFS + '?' + new URLSearchParams({
+    service: 'WFS', version: '2.0.0', request: 'GetFeature', typeNames: 'open-data-platform:' + layer,
+    outputFormat: 'application/json', srsName: 'EPSG:4326', bbox: [W, S, E, N].join(',') + ',EPSG:4326'
+  }).toString();
+}
+async function getWFS(layer, label) {
+  const PAGE = 5000;
+  const first = await getJSON(wfsUrl(layer) + '&count=' + PAGE);
+  let feats = first.features;
+  if (feats.length >= PAGE) {
+    feats = [];
+    const sort = WFS_SORT_KEY[layer] ? '&sortBy=' + WFS_SORT_KEY[layer] : '';
+    for (let start = 0; start < 1e6; start += PAGE) {
+      const j = await getJSON(wfsUrl(layer) + '&count=' + PAGE + '&startIndex=' + start + sort);
+      feats.push(...j.features);
+      log('  ' + label + ': ' + feats.length.toLocaleString() + ' so far…');
+      if (j.features.length < PAGE) break;
+    }
+  }
+  log(label + ': ' + feats.length.toLocaleString());
+  return feats;
+}
+async function getINat() {
+  const out = []; let idAbove = 0;
+  for (let page = 0; page < 1000; page++) {
+    const p = new URLSearchParams({
+      iconic_taxa: 'Plantae', verifiable: 'true', geoprivacy: 'open', taxon_geoprivacy: 'open',
+      swlat: S, swlng: W, nelat: N, nelng: E, preferred_place_id: '7830', locale: 'en',
+      per_page: '200', order_by: 'id', order: 'asc', id_above: idAbove
+    });
+    const j = await getJSON('https://api.inaturalist.org/v1/observations?' + p.toString());
+    out.push(...j.results);
+    if (page === 0) log('  iNaturalist: ' + j.total_results.toLocaleString() + ' plant records to download');
+    if (j.results.length < 200) break;
+    idAbove = j.results[j.results.length - 1].id;
+    if (page % 5 === 4) log('  iNaturalist: ' + out.length.toLocaleString() + ' so far…');
+    await sleep(1000); // iNaturalist asks for about one request per second
+  }
+  log('iNaturalist plant records: ' + out.length.toLocaleString());
+  return out;
+}
+
+// ---------------- Geometry encoding (compact: integer deltas at 1e-5 degrees ≈ 1 m) ----------------
+function polysOf(geom) { return geom.type === 'MultiPolygon' ? geom.coordinates : geom.type === 'Polygon' ? [geom.coordinates] : []; }
+function encodeGeom(geom) {
+  return polysOf(geom).map(poly => poly.map(ring => {
+    const out = []; let px = 0, py = 0;
+    for (const [x, y] of ring) {
+      const ix = Math.round(x * 1e5), iy = Math.round(y * 1e5);
+      if (out.length && ix === px && iy === py) continue;
+      out.push(ix - px, iy - py); px = ix; py = iy;
+    }
+    return out;
+  })).filter(p => p.length && p[0].length >= 8).map(p => p.filter(r => r.length >= 8));
+}
+function simplified(f, tol) {
+  try { return turf.simplify(f, { tolerance: tol, highQuality: false, mutate: false }).geometry; } catch (e) { return f.geometry; }
+}
+
+// ---------------- Lookup handling ----------------
+function parseCSV(text) {
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+    else if (c === '"') q = true;
+    else if (c === ',') { row.push(cell); cell = ''; }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+    else cell += c;
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(x => x.trim()));
+}
+function originCode(text) {
+  const t = (text || '').toLowerCase().trim();
+  if (t.startsWith('introduced') || t === 'i') return 'I';
+  if (t.includes('not local') || t.includes('planted') || t === 'p') return 'P';
+  return 'N';
+}
+$('lookupFile').addEventListener('change', async e => {
+  const file = e.target.files[0]; if (!file) return;
+  try {
+    const rows = parseCSV((await file.text()).replace(/^﻿/, ''));
+    const head = rows[0].map(h => h.trim().toLowerCase());
+    const col = n => head.indexOf(n);
+    const need = ['taxon_id', 'scientific_name', 'origin', 'lifeform_code', 'counts_as_native_understorey'];
+    const missing = need.filter(n => col(n) < 0);
+    if (missing.length) throw new Error('missing column(s): ' + missing.join(', '));
+    const taxa = {};
+    for (const r of rows.slice(1)) {
+      const id = parseInt(r[col('taxon_id')], 10); if (!id) continue;
+      const lf = (r[col('lifeform_code')] || '').trim().toUpperCase();
+      if (lf && !LOOKUP.lifeforms[lf]) throw new Error('unknown lifeform code "' + lf + '" for ' + r[col('scientific_name')]);
+      taxa[id] = [r[col('scientific_name')], lf, originCode(r[col('origin')]), (r[col('counts_as_native_understorey')] || '').trim().toUpperCase() === 'Y' ? 'Y' : 'N'];
+    }
+    const genus = {}; const seen = {};
+    for (const [sci, lf, org] of Object.values(taxa)) {
+      const g = sci.split(' ')[0]; const k = lf + '|' + org;
+      if (!seen[g]) seen[g] = new Set(); seen[g].add(k);
+    }
+    for (const [g, set] of Object.entries(seen)) if (set.size === 1) genus[g] = [...set][0].split('|');
+    lookup = { lifeforms: LOOKUP.lifeforms, excluded: LOOKUP.excluded, taxa, genus };
+    $('lookupStatus').textContent = 'Using ' + file.name + ' (' + Object.keys(taxa).length + ' taxa)';
+    $('lookupStatus').className = 'ok';
+  } catch (err) {
+    lookup = LOOKUP;
+    $('lookupStatus').textContent = 'Could not read that file (' + err.message + ') – using built-in list';
+    $('lookupStatus').className = 'bad';
+  }
+});
+function classify(id, name, inatIntroduced) {
+  const L = lookup.taxa[id];
+  if (L) return { lf: L[1] || '', origin: L[2], und: L[3] === 'Y', src: 'lookup' };
+  const G = lookup.genus[(name || '').split(' ')[0]];
+  if (G) return { lf: G[0], origin: G[1], und: G[1] === 'N' && !lookup.excluded.includes(G[0]), src: 'genus' };
+  const origin = inatIntroduced ? 'I' : 'N';
+  return { lf: '', origin, und: origin === 'N', src: 'unclassified' };
+}
+
+// ---------------- Roadside sections ----------------
+const ROADSIDE_SECTION_M = 500;
+async function buildRoadsides(casFeats, roadFeats) {
+  const cas = casFeats.map(c => (c._b = turf.bbox(c), c));
+  const cells = [];
+  // simple grid index so each new piece is only compared with nearby sections
+  const G = 0.01, grid = new Map();
+  const keys = b => { const ks = []; for (let x = Math.floor(b[0] / G); x <= Math.floor(b[2] / G); x++) for (let y = Math.floor(b[1] / G); y <= Math.floor(b[3] / G); y++) ks.push(x + ',' + y); return ks; };
+  const near = b => { const s = new Set(); for (const k of keys(b)) for (const c of (grid.get(k) || [])) s.add(c); return [...s]; };
+  const index = c => { for (const k of keys(c.bbox)) { if (!grid.has(k)) grid.set(k, []); grid.get(k).push(c); } };
+  const addPiece = (piece, road, lengthM) => {
+    let pb = turf.bbox(piece);
+    for (const prev of near(pb)) {
+      if (!piece) return;
+      if (!bboxOverlap(pb, prev.bbox)) continue;
+      piece = safeDiff(piece, prev.feature);
+      if (piece) pb = turf.bbox(piece);
+    }
+    if (piece && turf.area(piece) > 200) { const c = { feature: piece, bbox: pb, road, lengthM }; cells.push(c); index(c); }
+  };
+  let ri = 0;
+  for (const r of roadFeats) {
+    if (++ri % 25 === 0) { progress(0.55 + 0.2 * ri / roadFeats.length); await tick(); }
+    if (!r.geometry) continue;
+    const name = r.properties.ezi_road_name_label || 'Unnamed road';
+    const lines = r.geometry.type === 'MultiLineString' ? r.geometry.coordinates.map(c => turf.lineString(c)) : [turf.lineString(r.geometry.coordinates)];
+    for (const ln of lines) {
+      for (const chunk of turf.lineChunk(ln, ROADSIDE_SECTION_M / 1000).features) {
+        const buf = turf.buffer(chunk, 40, { units: 'meters' });
+        const bb = turf.bbox(buf);
+        const lengthM = turf.length(chunk) * 1000;
+        for (const c of cas) {
+          if (!bboxOverlap(bb, c._b)) continue;
+          const piece = safeIntersect(buf, c);
+          if (piece) addPiece(piece, name, lengthM);
+        }
+      }
+    }
+  }
+  let ci = 0;
+  for (const c of cas) {
+    if (++ci % 25 === 0) { progress(0.75 + 0.05 * ci / cas.length); await tick(); }
+    let rest = c, rb = c._b;
+    for (const p of near(rb)) { if (!rest) break; if (bboxOverlap(rb, p.bbox)) { rest = safeDiff(rest, p.feature); if (rest) rb = turf.bbox(rest); } }
+    if (!rest) continue;
+    const parts = rest.geometry.type === 'MultiPolygon' ? rest.geometry.coordinates.map(g => turf.polygon(g)) : [rest];
+    for (const part of parts) {
+      const a = turf.area(part);
+      if (a < 30) continue;
+      const grown = turf.buffer(part, 3, { units: 'meters' });
+      const gb = turf.bbox(grown);
+      const touching = a < 3000 && near(gb).find(p => bboxOverlap(gb, p.bbox) && turf.booleanIntersects(grown, p.feature));
+      if (touching) {
+        try { touching.feature = turf.union(touching.feature, part); touching.bbox = turf.bbox(touching.feature); } catch (e) {}
+      } else if (a > 500) {
+        const cell = { feature: part, bbox: turf.bbox(part), road: 'Road reserve with no mapped road (unformed)', lengthM: null };
+        cells.push(cell); index(cell);
+      }
+    }
+  }
+  return cells;
+}
+
+// ---------------- Build ----------------
+let output = null, unclassifiedCsv = null;
+$('go').addEventListener('click', async () => {
+  $('go').disabled = true; $('resultCard').style.display = 'none'; logEl.textContent = 'Ready.';
+  const t0 = performance.now();
+  try {
+    const lat = parseFloat($('lat').value), lng = parseFloat($('lng').value), size = parseFloat($('size').value);
+    const half = size / 2;
+    const dLat = half / 110.574, dLon = half / (111.320 * Math.cos(lat * Math.PI / 180));
+    S = lat - dLat; N = lat + dLat; W = lng - dLon; E = lng + dLon;
+    log('Area: ' + size + ' × ' + size + ' km around ' + lat + ', ' + lng);
+
+    // ---- 1. download ----
+    log('Downloading…'); progress(0.02);
+    let done = 0; const step = () => progress(0.02 + 0.4 * (++done / 7));
+    const [propF, parcelF, addrF, vegF, casF, roadF, obs] = await Promise.all([
+      getWFS('v_property_mp', 'Properties').then(x => (step(), x)),
+      getWFS('v_parcel_mp', 'Parcels').then(x => (step(), x)),
+      getWFS('address', 'Addresses').catch(e => (log('Addresses failed (' + e.message + ') – continuing without'), [])).then(x => (step(), x)),
+      getWFS('nv2005_evcbcs', 'Native vegetation 2005 patches').then(x => (step(), x)),
+      getWFS('road_casement_polygon', 'Road reserves').then(x => (step(), x)),
+      getWFS('tr_road', 'Road centrelines').then(x => (step(), x)),
+      getINat().then(x => (step(), x))
+    ]);
+    log('Downloads finished in ' + Math.round((performance.now() - t0) / 1000) + ' s', 'ok');
+
+    // ---- 2. parcels & veg ----
+    progress(0.45); await tick();
+    const parcels = parcelF.filter(f => f.geometry).map(f => ({ f, bbox: turf.bbox(f), ha: turf.area(f) / 10000, obs: 0, veg: null, vegHa: 0 }));
+    const vegFeats = vegF.filter(f => f.geometry);
+    vegFeats.forEach(f => f._bbox = turf.bbox(f));
+
+    // ---- 3. roadside sections ----
+    log('Building roadside sections from ' + casF.length.toLocaleString() + ' road reserves…'); progress(0.55); await tick();
+    const roadsides = await buildRoadsides(casF.filter(f => f.geometry), roadF);
+    log('Roadside sections: ' + roadsides.length.toLocaleString());
+
+    // ---- 4. iNat records -> parcels / roadsides ----
+    log('Placing iNaturalist records…'); progress(0.8); await tick();
+    const PG = 0.01, pgrid = new Map();
+    const gkeys = b => { const ks = []; for (let x = Math.floor(b[0] / PG); x <= Math.floor(b[2] / PG); x++) for (let y = Math.floor(b[1] / PG); y <= Math.floor(b[3] / PG); y++) ks.push(x + ',' + y); return ks; };
+    const addGrid = (item, kind, i) => { for (const k of gkeys(item.bbox)) { if (!pgrid.has(k)) pgrid.set(k, []); pgrid.get(k).push([kind, i]); } };
+    parcels.forEach((p, i) => addGrid(p, 1, i));
+    roadsides.forEach((r, i) => addGrid(r, 2, i));
+    const taxa = {}; const obsOut = []; let coarse = 0, placedP = 0, placedR = 0, unplaced = 0;
+    for (const o of obs) {
+      if (!o.geojson || !o.taxon) continue;
+      if (o.positional_accuracy && o.positional_accuracy > 200) { coarse++; continue; }
+      const t = o.taxon;
+      const id = t.rank_level < 10 && t.min_species_taxon_id ? t.min_species_taxon_id : t.id; // subspecies roll up to species
+      if (!taxa[id]) {
+        const name = t.rank_level < 10 ? t.name.split(' ').slice(0, 2).join(' ') : t.name;
+        const c = classify(id, name, !!t.introduced);
+        taxa[id] = [name, t.preferred_common_name || '', c.lf, c.origin, c.und ? 1 : 0, c.src, t.rank_level <= 10 ? 1 : 0];
+      }
+      const [x, y] = o.geojson.coordinates;
+      const pt = turf.point([x, y]);
+      let kind = 0, idx = -1;
+      const cands = pgrid.get(Math.floor(x / PG) + ',' + Math.floor(y / PG)) || [];
+      for (const [k, i] of cands) {
+        const u = k === 1 ? parcels[i] : roadsides[i];
+        if (!bboxOverlap(u.bbox, [x, y, x, y])) continue;
+        if (turf.booleanPointInPolygon(pt, k === 1 ? u.f : u.feature)) { kind = k; idx = i; if (k === 1) break; }
+      }
+      if (kind === 1) { placedP++; parcels[idx].obs++; } else if (kind === 2) placedR++; else unplaced++;
+      obsOut.push([+x.toFixed(5), +y.toFixed(5), id, t.rank_level, o.observed_on || '', o.quality_grade === 'research' ? 1 : 0, o.id, kind, idx]);
+    }
+    log('Records in parcels: ' + placedP + ' · on roadsides: ' + placedR + ' · elsewhere: ' + unplaced + ' · left out (GPS > 200 m): ' + coarse);
+
+    // ---- 5. clip native veg to parcels that have records ----
+    const recorded = parcels.filter(p => p.obs > 0);
+    log('Matching native vegetation to ' + recorded.length + ' parcels with records…'); progress(0.85); await tick();
+    let ri = 0;
+    for (const p of recorded) {
+      if (++ri % 10 === 0) { progress(0.85 + 0.08 * ri / recorded.length); await tick(); }
+      p.veg = []; p.vegHa = 0;
+      for (const v of vegFeats) {
+        if (!bboxOverlap(p.bbox, v._bbox)) continue;
+        const piece = safeIntersect(p.f, v);
+        if (piece) { p.veg.push(piece); p.vegHa += turf.area(piece) / 10000; }
+      }
+    }
+
+    // ---- 6. package ----
+    log('Packaging…'); progress(0.94); await tick();
+    const evcIdx = {}, evcs = [];
+    const veg = vegFeats.map(f => {
+      const p = f.properties; const k = p.x_evcname + '|' + p.evc;
+      if (!(k in evcIdx)) { evcIdx[k] = evcs.length; evcs.push([p.x_evcname, p.evc, []]); }
+      const e = evcs[evcIdx[k]]; if (p.evc_bcs_desc && !e[2].includes(p.evc_bcs_desc)) e[2].push(p.evc_bcs_desc);
+      return [evcIdx[k], encodeGeom(simplified(f, 0.00001))];
+    });
+    const addrByProp = {};
+    for (const a of addrF) { const k = a.properties.property_pfi; if (k) (addrByProp[k] = addrByProp[k] || new Set()).add(a.properties.ezi_address); }
+    output = {
+      meta: {
+        built: new Date().toISOString(), centre: [lat, lng], sizeKm: size, bbox: [W, S, E, N],
+        counts: { parcels: parcels.length, properties: propF.length, veg: veg.length, roadsides: roadsides.length, obs: obsOut.length, coarse, unplaced },
+        lookup: $('lookupStatus').textContent, roadsideSectionM: ROADSIDE_SECTION_M
+      },
+      lifeforms: lookup.lifeforms,
+      excludedLifeforms: lookup.excluded,
+      taxa, evcs, veg,
+      parcels: parcels.map(p => [p.f.properties.parcel_spi || '', p.f.properties.parcel_pfi || '', p.f.properties.parcel_road === 'Y' ? 1 : 0, +p.ha.toFixed(2), encodeGeom(p.f.geometry)]),
+      parcelVeg: Object.fromEntries(parcels.map((p, i) => [i, p]).filter(([, p]) => p.veg).map(([i, p]) => [i, [+p.vegHa.toFixed(2), p.veg.map(g => encodeGeom(g.geometry))]])),
+      props: propF.filter(f => f.geometry).map(f => [f.properties.prop_pfi, f.properties.prop_propnum || '', [...(addrByProp[f.properties.prop_pfi] || [])], encodeGeom(f.geometry)]),
+      roadsides: roadsides.map(r => [r.road, r.lengthM ? Math.round(r.lengthM) : 0, +(turf.area(r.feature) / 10000).toFixed(3), encodeGeom(r.feature.geometry)]),
+      obs: obsOut
+    };
+
+    // unclassified plants for the lookup
+    const newTaxa = Object.entries(taxa).filter(([, t]) => t[5] !== 'lookup' && t[6]);   // species-level names only
+    unclassifiedCsv = newTaxa.length ? '﻿taxon_id,scientific_name,common_name,origin,lifeform_code,lifeform,counts_as_native_understorey,note\n' +
+      newTaxa.map(([id, t]) => [id, t[0], t[1], t[3] === 'I' ? 'introduced' : t[3] === 'P' ? 'native to Australia but not local (likely planted)' : 'native',
+        t[2], t[2] ? lookup.lifeforms[t[2]] : '', t[4] ? 'Y' : 'N', t[5] === 'genus' ? 'guessed from genus – please check' : 'not yet classified']
+        .map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')).join('\n') : null;
+
+    const json = JSON.stringify(output);
+    window.__outputText = '// Biolinks map data – built ' + output.meta.built + ' by biolinks_data_builder.html\nwindow.BIOLINKS_DATA = ' + json + ';\n';
+    const mb = (window.__outputText.length / 1048576).toFixed(1);
+    progress(1);
+    log('Done in ' + Math.round((performance.now() - t0) / 1000) + ' s · file size ' + mb + ' MB', 'ok');
+
+    const nUnd = Object.values(taxa).filter(t => t[4]).length;
+    $('summary').innerHTML = [
+      ['Parcels', parcels.length], ['Properties', propF.length], ['Native vegetation patches', veg.length],
+      ['Roadside sections', roadsides.length], ['iNaturalist plant records used', obsOut.length],
+      ['Plant taxa recorded', Object.keys(taxa).length], ['…counted as native understorey', nUnd],
+      ['…species not in the lookup (please classify)', newTaxa.length], ['Records left out (GPS accuracy worse than 200 m)', coarse], ['File size', mb + ' MB']
+    ].map(([k, v]) => '<tr><td>' + k + '</td><td>' + (typeof v === 'number' ? v.toLocaleString() : v) + '</td></tr>').join('');
+    $('saveNew').style.display = unclassifiedCsv ? '' : 'none';
+    $('resultCard').style.display = '';
+  } catch (e) {
+    log('Build failed: ' + e.message, 'bad'); console.error(e);
+  } finally { $('go').disabled = false; }
+});
+
+async function saveText(text, name, type, desc) {
+  const blob = new Blob([text], { type });
+  if (window.showSaveFilePicker) {
+    try {
+      const h = await showSaveFilePicker({ suggestedName: name, types: [{ description: desc, accept: { [type]: ['.' + name.split('.').pop()] } }] });
+      const w = await h.createWritable(); await w.write(blob); await w.close();
+      return 'Saved ' + h.name;
+    } catch (e) { if (e.name === 'AbortError') return 'Save cancelled'; }
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  return 'Downloaded ' + name + ' – move it into the same folder as the map';
+}
+$('save').addEventListener('click', async () => { $('saveNote').textContent = await saveText(window.__outputText, 'biolinks_data.js', 'text/javascript', 'Biolinks map data'); });
+$('saveNew').addEventListener('click', async () => { await saveText(unclassifiedCsv, 'unclassified_plants.csv', 'text/csv', 'CSV'); });
+</script>
+</body>
+</html>

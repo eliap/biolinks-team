@@ -1,0 +1,249 @@
+﻿taxon_id,scientific_name,common_name,origin,lifeform_code,lifeform,counts_as_native_understorey,note
+482401,Cycnogeton procerus,Water Ribbons,native,AQ,Aquatic herb,Y,
+243498,Myriophyllum crispatum,upright water-milfoil,native,AQ,Aquatic herb,Y,
+400104,Breutelia affinis,Red-heart Moss,native,BRY,Bryophyte or liverwort,Y,moss
+130289,Campylopus introflexus,Heath Star-moss,native,BRY,Bryophyte or liverwort,Y,moss
+163992,Hypnum cupressiforme,Cypress-leaved Plait-moss,native,BRY,Bryophyte or liverwort,Y,moss
+1091371,Leptodontium paradoxum,,native,BRY,Bryophyte or liverwort,Y,moss
+68286,Polytrichum juniperinum,juniper haircap moss,native,BRY,Bryophyte or liverwort,Y,moss
+56289,Targionia hypophylla,Orobus-seed Liverwort,native,BRY,Bryophyte or liverwort,Y,liverwort
+323950,Cheilanthes austrotenuifolia,Rock Fern,native,GF,Ground fern,Y,
+208571,Themeda triandra,Kangaroo Grass,native,LTG,Large tufted graminoid,Y,
+125125,Xanthorrhoea australis,Austral Grass-tree,native,LTG,Large tufted graminoid,Y,grass-tree
+481616,Xanthorrhoea semiplana,tufted grass-tree,native,LTG,Large tufted graminoid,Y,grass-tree
+210141,Ajuga australis,Austral Bugle,native,MH,Medium herb,Y,
+1138706,Arthropodium strictum,chocolate lily,native,MH,Medium herb,Y,lily
+421601,Brunonia australis,blue pincushion,native,MH,Medium herb,Y,
+516738,Bulbine bulbosa,Bulbine Lily,native,MH,Medium herb,Y,lily
+83628,Burchardia umbellata,Milkmaids,native,MH,Medium herb,Y,lily
+353967,Caesia calliantha,blue grass lily,native,MH,Medium herb,Y,lily
+321090,Caladenia carnea,Pink Lady Fingers,native,MH,Medium herb,Y,orchid
+553187,Caladenia clavigera,plain-lip spider orchid,native,MH,Medium herb,Y,orchid
+557906,Caladenia cucullata,hooded caladenia,native,MH,Medium herb,Y,orchid
+516622,Caladenia parva,Small Spider-orchid,native,MH,Medium herb,Y,orchid
+474399,Caladenia tentaculata,eastern mantis orchid,native,MH,Medium herb,Y,orchid
+470757,Calocephalus citreus,Lemon Beauty-heads,native,MH,Medium herb,Y,daisy
+417787,Calochilus campestris,copper beard orchid,native,MH,Medium herb,Y,orchid
+83369,Calochilus robertsonii,Purple Beard Orchid,native,MH,Medium herb,Y,orchid
+244345,Chrysocephalum apiculatum,Common Everlasting,native,MH,Medium herb,Y,daisy
+210175,Dianella revoluta,Blueberry Lily,native,MH,Medium herb,Y,lily
+553104,Diuris behrii,golden cowslips,native,MH,Medium herb,Y,orchid
+553092,Diuris chryseopsis,Common Golden Moths,native,MH,Medium herb,Y,orchid
+328055,Diuris orientis,Wallflower orchid,native,MH,Medium herb,Y,orchid
+516646,Diuris pardina,Leopard Orchid,native,MH,Medium herb,Y,orchid
+1154539,Diuris × palachila,,native,MH,Medium herb,Y,orchid hybrid
+424565,Drosera auriculata,Tall sundew,native,MH,Medium herb,Y,sundew
+823782,Drosera gunniana,,native,MH,Medium herb,Y,sundew
+713917,Drosera planchonii,Climbing Sundew,native,MH,Medium herb,Y,sundew
+558112,Eryngium ovinum,blue devil,native,MH,Medium herb,Y,
+83357,Glossodia major,Waxlip Orchid,native,MH,Medium herb,Y,orchid
+526704,Gonocarpus elatus,hill raspwort,native,MH,Medium herb,Y,
+421570,Goodenia blackiana,Black's goodenia,native,MH,Medium herb,Y,
+769918,Hackelia suaveolens,sweet hound's-tongue,native,MH,Medium herb,Y,
+403386,Leptorhynchos squamatus,Scaly-buttons,native,MH,Medium herb,Y,daisy
+1132139,Microseris walteri,Murnong,native,MH,Medium herb,Y,daisy
+403926,Microtis arenaria,Pale Onion-orchid,native,MH,Medium herb,Y,orchid
+353958,Microtis unifolia,common onion-orchid,native,MH,Medium herb,Y,orchid
+557987,Pelargonium rodneyanum,magenta stork's-bill,native,MH,Medium herb,Y,
+511256,Podolepis,Copper-wire Daisies,native,MH,Medium herb,Y,genus only
+558111,Prasophyllum maccannii,Inland leek orchid,native,MH,Medium herb,Y,orchid
+1235070,Pterostylis ampliata,southern autumn greenhood,native,MH,Medium herb,Y,orchid
+83400,Pterostylis curta,blunt greenhood,native,MH,Medium herb,Y,orchid
+516647,Pterostylis melagramma,tall greenhood,native,MH,Medium herb,Y,orchid
+321216,Pterostylis nutans,Nodding Greenhood,native,MH,Medium herb,Y,orchid
+555356,Pterostylis striata,mainland striped greenhood,native,MH,Medium herb,Y,orchid
+577969,Senecio picridioides,fireweed,native,MH,Medium herb,Y,daisy
+79052,Senecio quadridentatus,cotton fireweed,native,MH,Medium herb,Y,daisy
+323868,Stackhousia monogyna,Creamy Candles,native,MH,Medium herb,Y,
+323935,Thelymitra antennifera,lemon-scented sun orchid,native,MH,Medium herb,Y,orchid
+83359,Thelymitra ixioides,spotted sun-orchid,native,MH,Medium herb,Y,orchid
+557454,Thelymitra luteocilium,fringed sun orchid,native,MH,Medium herb,Y,orchid
+406523,Thelymitra megacalyptra,plains sun orchid,native,MH,Medium herb,Y,orchid
+790420,Thelymitra peniculata,trim sun orchid,native,MH,Medium herb,Y,orchid
+516247,Thelymitra rubra,salmon sun-orchid,native,MH,Medium herb,Y,orchid
+1685275,Thelymitra serpentina,,native,MH,Medium herb,Y,orchid
+567945,Thelymitra × macmillanii,,native,MH,Medium herb,Y,orchid hybrid
+209397,Tricoryne elatior,yellow rush-lily,native,MH,Medium herb,Y,lily
+406989,Vittadinia gracilis,Purple Fuzzweed,native,MH,Medium herb,Y,daisy
+916652,Wahlenbergia capillaris,Tufted Bluebell,native,MH,Medium herb,Y,
+131651,Wahlenbergia stricta,Australian bluebell,native,MH,Medium herb,Y,
+210124,Xerochrysum viscosum,sticky everlasting,native,MH,Medium herb,Y,daisy
+128763,Acacia genistifolia,early wattle,native,MS,Medium shrub,Y,
+321064,Acacia myrtifolia,Myrtle Wattle,native,MS,Medium shrub,Y,
+75251,Acacia paradoxa,Hedge Wattle,native,MS,Medium shrub,Y,
+83626,Calytrix tetragona,Fringe Myrtle,native,MS,Medium shrub,Y,
+520337,Daviesia leptophylla,narrow-leaf bitter-pea,native,MS,Medium shrub,Y,
+1546152,Gaudium myrsinoides,Heath Teatree,native,MS,Medium shrub,Y,
+411301,Grevillea alpina,Mountain Grevillea,native,MS,Medium shrub,Y,
+320929,Hakea decurrens,Bushy Needlewood,native,MS,Medium shrub,Y,
+502257,Hakea rostrata,Beaked Hakea,native,MS,Medium shrub,Y,
+83364,Indigofera australis,Australian Indigo,native,MS,Medium shrub,Y,
+801140,Melaleuca paludicola,river bottlebrush,native,MS,Medium shrub,Y,
+353933,Ozothamnus obcordatus,Grey Everlasting,native,MS,Medium shrub,Y,
+559051,Pultenaea largiflorens,twiggy bush-pea,native,MS,Medium shrub,Y,
+566532,Senecio odoratus,Scented Groundsel,native,MS,Medium shrub,Y,
+142875,Austrostipa oligostachya,,native,MTG,Medium to tiny tufted graminoid,Y,
+57168,Eragrostis,Lovegrasses,native,MTG,Medium to tiny tufted graminoid,Y,genus only
+402866,Juncus subsecundus,Fingered Rush,native,MTG,Medium to tiny tufted graminoid,Y,rush
+957534,Lepidosperma carphoides,black rapier-sedge,native,MTG,Medium to tiny tufted graminoid,Y,sedge
+862413,Lomandra nana,dwarf mat-rush,native,MTG,Medium to tiny tufted graminoid,Y,
+577966,Neurachne alopecuroidea,foxtail mulga grass,native,MTG,Medium to tiny tufted graminoid,Y,
+1148231,Rytidosperma indutum,Tall Wallaby-grass,native,MTG,Medium to tiny tufted graminoid,Y,
+210177,Schoenus apogon,common bog-rush,native,MTG,Medium to tiny tufted graminoid,Y,sedge
+836494,Chorizandra enodis,black bristlerush,native,NTG,Non-tufted graminoid,Y,sedge
+1168854,Lepidosperma laeve,,native,NTG,Non-tufted graminoid,Y,sedge
+959916,Austrostipa elegantissima,Feather Speargrass,native,SCC,Scrambler or climber,Y,scrambling grass
+321091,Clematis aristata,Australian Clematis,native,SCC,Scrambler or climber,Y,
+323815,Clematis microphylla,Small-leaved Clematis,native,SCC,Scrambler or climber,Y,
+321125,Comesperma volubile,Love Creeper,native,SCC,Scrambler or climber,Y,
+526700,Convolvulus angustissimus,Blushing Bindweed,native,SCC,Scrambler or climber,Y,
+210184,Hardenbergia violacea,Purple coral pea,native,SCC,Scrambler or climber,Y,
+143356,Kennedia prostrata,Running Postman,native,SCC,Scrambler or climber,Y,
+323937,Thysanotus patersonii,Twining Fringe-lily,native,SCC,Scrambler or climber,Y,lily (twiner)
+75256,Acaena novae-zelandiae,bidgee-widgee,native,SPH,Small or prostrate herb,Y,
+779425,Allittia uliginosa,Wet-Heath Daisy,native,SPH,Small or prostrate herb,Y,daisy
+516379,Asperula conferta,Common Woodruff,native,SPH,Small or prostrate herb,Y,
+369421,Caladenia fuscata,Dusky Fingers,native,SPH,Small or prostrate herb,Y,orchid
+708211,Caladenia mentiens,Lesser Fingers,native,SPH,Small or prostrate herb,Y,orchid
+570398,Caladenia ornata,ornate pink fingers,native,SPH,Small or prostrate herb,Y,orchid
+516250,Caladenia pusilla,Pygmy Caladenia,native,SPH,Small or prostrate herb,Y,orchid
+194766,Chamaescilla corymbosa,Blue Stars,native,SPH,Small or prostrate herb,Y,lily
+155215,Corybas incurvus,slaty helmet-orchid,native,SPH,Small or prostrate herb,Y,orchid
+552476,Cyanicula caerulea,blue finger-orchid,native,SPH,Small or prostrate herb,Y,orchid
+353940,Cymbonotus preissianus,Austral bear's-ears,native,SPH,Small or prostrate herb,Y,
+323904,Cyrtostylis reniformis,small gnat-orchid,native,SPH,Small or prostrate herb,Y,orchid
+143292,Drosera aberrans,scented sundew,native,SPH,Small or prostrate herb,Y,sundew
+148240,Eriochilus cucullatus,Parson's Bands,native,SPH,Small or prostrate herb,Y,orchid
+344664,Eryngium vesiculosum,Blue Devils,native,SPH,Small or prostrate herb,Y,
+118443,Geranium retrorsum,Grassland Crane's-bill,native,SPH,Small or prostrate herb,Y,
+77262,Geranium solanderi,Solander's geranium,native,SPH,Small or prostrate herb,Y,
+210345,Gonocarpus tetragynus,Common Raspwort,native,SPH,Small or prostrate herb,Y,
+421578,Goodenia geniculata,Bent Goodenia,native,SPH,Small or prostrate herb,Y,
+1270120,Goodenia paradoxa,Spur Goodenia,native,SPH,Small or prostrate herb,Y,
+421598,Goodenia pinnatifida,scrambled eggs,native,SPH,Small or prostrate herb,Y,
+157549,Haloragis,,native,SPH,Small or prostrate herb,Y,genus only
+956768,Hyalosperma praecox,,native,SPH,Small or prostrate herb,Y,daisy (annual)
+210152,Hydrocotyle laxiflora,Stinking Pennywort,native,SPH,Small or prostrate herb,Y,
+163969,Hypericum gramineum,Small St John's Wort,native,SPH,Small or prostrate herb,Y,
+511241,Millotia myosotidifolia,Broad-leaved Millotia,native,SPH,Small or prostrate herb,Y,daisy (annual)
+874298,Millotia tenuifolia,Soft Millotia,native,SPH,Small or prostrate herb,Y,daisy (annual)
+577590,Myriocephalus rhizocephalus,woolly-heads,native,SPH,Small or prostrate herb,Y,daisy (annual)
+353868,Oxalis perennans,Native Oxalis,native,SPH,Small or prostrate herb,Y,
+200064,Parietaria debilis,Shade Pellitory,native,SPH,Small or prostrate herb,Y,
+748411,Pauridia glabella,Tiny Star,native,SPH,Small or prostrate herb,Y,lily
+774098,Pauridia vaginata,yellow star,native,SPH,Small or prostrate herb,Y,lily
+323900,Pheladenia deformis,Blue Fairy Orchid,native,SPH,Small or prostrate herb,Y,orchid
+940794,Plantago gaudichaudii,narrow plantain,native,SPH,Small or prostrate herb,Y,
+891423,Platysace heterophylla,Slender Platysace,native,SPH,Small or prostrate herb,Y,
+58991,Portulaca oleracea,Pigweed,native,SPH,Small or prostrate herb,Y,
+53083,Pseudognaphalium luteoalbum,Jersey Cudweed,native,SPH,Small or prostrate herb,Y,
+140424,Pterostylis concinna,Trim Greenhood,native,SPH,Small or prostrate herb,Y,orchid
+487293,Pterostylis nana,dwarf greenhood,native,SPH,Small or prostrate herb,Y,orchid
+323928,Pyrorchis nigricans,Red Beaks,native,SPH,Small or prostrate herb,Y,orchid
+793457,Stackhousia subterranea,Grasslands Candles,native,SPH,Small or prostrate herb,Y,
+504086,Wurmbea dioica,Early Nancy,native,SPH,Small or prostrate herb,Y,lily
+709692,Wurmbea latifolia,,native,SPH,Small or prostrate herb,Y,lily
+560601,Acacia aculeatissima,Thin-leaf Wattle,native,SS,Small or prostrate shrub,Y,prostrate shrub
+210185,Acacia gunnii,ploughshare wattle,native,SS,Small or prostrate shrub,Y,
+323796,Acrotriche serrulata,Honey-pots,native,SS,Small or prostrate shrub,Y,prostrate shrub
+210147,Brachyloma daphnoides,Daphne heath,native,SS,Small or prostrate shrub,Y,
+564892,Dillwynia hispida,red parrot-pea,native,SS,Small or prostrate shrub,Y,
+520478,Eutaxia microphylla,common eutaxia,native,SS,Small or prostrate shrub,Y,
+856072,Hibbertia australis,Erect Guinea-flower,native,SS,Small or prostrate shrub,Y,
+553155,Hibbertia crinita,Long-hair Guinea-flower,native,SS,Small or prostrate shrub,Y,
+210349,Hibbertia riparia,Erect Guinea-flower,native,SS,Small or prostrate shrub,Y,
+334810,Hibbertia stricta,,native,SS,Small or prostrate shrub,Y,
+823796,Hovea heterophylla,common hovea,native,SS,Small or prostrate shrub,Y,
+485275,Isopogon ceratophyllus,Horny Cone-bush,native,SS,Small or prostrate shrub,Y,
+323830,Leucopogon virgatus,common beard-heath,native,SS,Small or prostrate shrub,Y,
+83527,Lissanthe strigosa,peach heath,native,SS,Small or prostrate shrub,Y,
+634652,Ozothamnus pholidotus,,native,SS,Small or prostrate shrub,Y,
+556568,Pimelea curviflora,curved rice-flower,native,SS,Small or prostrate shrub,Y,
+323889,Pimelea humilis,Common Rice-flower,native,SS,Small or prostrate shrub,Y,
+323854,Platylobium obtusangulum,Common Flat-pea,native,SS,Small or prostrate shrub,Y,
+323860,Pultenaea pedunculata,matted bush-pea,native,SS,Small or prostrate shrub,Y,prostrate shrub
+1391984,Stenanthera conostephioides,Flame Heath,native,SS,Small or prostrate shrub,Y,
+1391449,Styphelia humifusa,Cranberry Heath,native,SS,Small or prostrate shrub,Y,prostrate shrub
+83366,Tetratheca ciliata,Pink-bells,native,SS,Small or prostrate shrub,Y,
+209475,Acacia implexa,Lightwood,native,UTLS,Understorey tree or large shrub,Y,
+53344,Acacia melanoxylon,blackwood,native,UTLS,Understorey tree or large shrub,Y,
+75253,Acacia pycnantha,Golden Wattle,native,UTLS,Understorey tree or large shrub,Y,
+323786,Allocasuarina littoralis,Black sheoak,native,UTLS,Understorey tree or large shrub,Y,
+122323,Allocasuarina verticillata,Drooping She-oak,native,UTLS,Understorey tree or large shrub,Y,
+133274,Banksia marginata,Silver Banksia,native,UTLS,Understorey tree or large shrub,Y,
+83571,Bursaria spinosa,sweet Bursaria,native,UTLS,Understorey tree or large shrub,Y,
+128978,Callitris rhomboidea,Port Jackson Pine,native,UTLS,Understorey tree or large shrub,Y,
+178212,Exocarpos cupressiformis,Cherry Ballart,native,UTLS,Understorey tree or large shrub,Y,
+589718,Melaleuca parvistaminea,Rough-barked Honey-myrtle,native,UTLS,Understorey tree or large shrub,Y,
+323294,Melaleuca squarrosa,scented paperbark,native,UTLS,Understorey tree or large shrub,Y,
+52990,Carduus pycnocephalus,slender thistle,introduced,LH,Large herb,N,
+52720,Dactylis glomerata,orchard grass,introduced,LTG,Large tufted graminoid,N,
+57188,Phalaris aquatica,phalaris,introduced,LTG,Large tufted graminoid,N,
+75868,Brassica fruticulosa,Mediterranean cabbage,introduced,MH,Medium herb,N,
+475002,Disa bracteata,South African Weed Orchid,introduced,MH,Medium herb,N,
+56077,Hypericum perforatum,St. John's wort,introduced,MH,Medium herb,N,
+53104,Hypochaeris radicata,cat's-ears,introduced,MH,Medium herb,N,
+181597,Ixia polystachia,African Cornlily,introduced,MH,Medium herb,N,
+58202,Malva parviflora,Small-flowered mallow,introduced,MH,Medium herb,N,
+53178,Plantago lanceolata,ribwort plantain,introduced,MH,Medium herb,N,
+54141,Tragopogon porrifolius,purple salsify,introduced,MH,Medium herb,N,
+481934,Amyema miquelii,Box Mistletoe,native,MIS,Mistletoe,N,
+777416,Amyema preissii,wireleaf mistletoe,native,MIS,Mistletoe,N,
+568074,Amyema quandang,grey mistletoe,native,MIS,Mistletoe,N,
+75387,Alyogyne huegelii,blue hibiscus,native to Australia but not local (likely planted),MS,Medium shrub,N,"WA/SA species, planted"
+60350,Artemisia absinthium,absinthe wormwood,introduced,MS,Medium shrub,N,
+320090,Austrocylindropuntia cylindrica,Cane Cactus,introduced,MS,Medium shrub,N,
+131642,Banksia ericifolia,Heath-leaved banksia,native to Australia but not local (likely planted),MS,Medium shrub,N,"NSW species, planted"
+76435,Coprosma repens,Mirror bush,introduced,MS,Medium shrub,N,
+1033225,Grevillea arenaria,,native to Australia but not local (likely planted),MS,Medium shrub,N,"NSW species, planted"
+77902,Lycium barbarum,matrimony vine,introduced,MS,Medium shrub,N,
+596690,Melaleuca linearis,Narrow-leaved Bottlebrush,native to Australia but not local (likely planted),MS,Medium shrub,N,"NSW species, planted"
+47563,Nerium oleander,oleander,introduced,MS,Medium shrub,N,
+325101,Opuntia puberula,,introduced,MS,Medium shrub,N,
+1511481,Rubigineae,Sweet-Brier Complex,introduced,MS,Medium shrub,N,briar rose
+47406,Spartium junceum,Spanish Broom,introduced,MS,Medium shrub,N,
+61058,Aira praecox,early hair grass,introduced,MTG,Medium to tiny tufted graminoid,N,
+52697,Avena,Oats,introduced,MTG,Medium to tiny tufted graminoid,N,genus only
+57157,Briza maxima,Greater Quaking Grass,introduced,MTG,Medium to tiny tufted graminoid,N,
+57162,Briza minor,Little quaking-grass,introduced,MTG,Medium to tiny tufted graminoid,N,
+52702,Bromus diandrus,great brome,introduced,MTG,Medium to tiny tufted graminoid,N,
+52703,Bromus hordeaceus,soft brome,introduced,MTG,Medium to tiny tufted graminoid,N,
+1377227,Festuca ambigua,Bearded Fescue,introduced,MTG,Medium to tiny tufted graminoid,N,
+52793,Holcus lanatus,Yorkshire fog,introduced,MTG,Medium to tiny tufted graminoid,N,
+52796,Hordeum murinum,wall barley,introduced,MTG,Medium to tiny tufted graminoid,N,
+164711,Lolium rigidum,Annual Ryegrass,introduced,MTG,Medium to tiny tufted graminoid,N,
+64107,Asparagus asparagoides,Bridal creeper,introduced,SCC,Scrambler or climber,N,
+78954,Salpichroa origanifolia,Cock's-eggs,introduced,SCC,Scrambler or climber,N,
+56024,Arctotheca calendula,Capeweed,introduced,SPH,Small or prostrate herb,N,
+55829,Cardamine hirsuta,hairy bittercress,introduced,SPH,Small or prostrate herb,N,
+56236,Centaurium erythraea,Common centaury,introduced,SPH,Small or prostrate herb,N,
+50853,Cerastium,Mouse-ear Chickweeds,introduced,SPH,Small or prostrate herb,N,genus only
+57090,Erodium botrys,Mediterranean Stork's-bill,introduced,SPH,Small or prostrate herb,N,
+47687,Erodium cicutarium,Redstem Stork's-bill,introduced,SPH,Small or prostrate herb,N,
+57092,Erodium moschatum,musk stork's-bill,introduced,SPH,Small or prostrate herb,N,
+53103,Hypochaeris glabra,Smooth Cat's Ear,introduced,SPH,Small or prostrate herb,N,
+791928,Lysimachia arvensis,scarlet pimpernel,introduced,SPH,Small or prostrate herb,N,
+342016,Plantago bellardii,Hairy Plantain,introduced,SPH,Small or prostrate herb,N,
+52764,Prunella vulgaris,common selfheal,introduced,SPH,Small or prostrate herb,N,
+68896,Romulea rosea,onion grass,introduced,SPH,Small or prostrate herb,N,
+53195,Rumex acetosella,Sheep's sorrel,introduced,SPH,Small or prostrate herb,N,
+69939,Trifolium angustifolium,Narrow-leaved clover,introduced,SPH,Small or prostrate herb,N,
+79408,Trifolium arvense,hare's foot clover,introduced,SPH,Small or prostrate herb,N,
+57076,Trifolium campestre,hop trefoil,introduced,SPH,Small or prostrate herb,N,
+60201,Trifolium subterraneum,Subterranean Clover,introduced,SPH,Small or prostrate herb,N,
+518360,Banksia gardneri,Prostrate Banksia,native to Australia but not local (likely planted),SS,Small or prostrate shrub,N,"WA species, planted"
+76462,Cotyledon orbiculata,pig's ear,introduced,SS,Small or prostrate shrub,N,
+79032,Sedum praealtum,green cockscomb,introduced,SS,Small or prostrate shrub,N,
+208167,Eucalyptus aromaphloia,Creswick Apple-box,native,TREE,Canopy tree,N,
+64128,Eucalyptus camaldulensis,River Red Gum,native,TREE,Canopy tree,N,
+210350,Eucalyptus dives,broad-leaved peppermint,native,TREE,Canopy tree,N,
+162754,Eucalyptus goniocalyx,Long-leaved Box,native,TREE,Canopy tree,N,
+339974,Eucalyptus leucoxylon,Yellow gum,native,TREE,Canopy tree,N,
+207906,Eucalyptus melliodora,Yellow Box,native,TREE,Canopy tree,N,
+58207,Eucalyptus polyanthemos,Red Box,native,TREE,Canopy tree,N,
+1515467,Hesperocyparis glabra,Smooth Arizona cypress,introduced,TREE,Canopy tree,N,
+63379,Acacia longifolia,Longleaf Wattle,native to Australia but not local (likely planted),UTLS,Understorey tree or large shrub,N,"coastal species, likely planted"
+472022,Acacia prominens,Gosford Wattle,native to Australia but not local (likely planted),UTLS,Understorey tree or large shrub,N,"NSW species, planted"
+410347,Hakea laurina,Pincushion hakea,native to Australia but not local (likely planted),UTLS,Understorey tree or large shrub,N,"WA species, planted"
+548756,Hakea petiolaris,sea urchin hakea,native to Australia but not local (likely planted),UTLS,Understorey tree or large shrub,N,"WA species, planted"
+323840,Myoporum insulare,common boobialla,native to Australia but not local (likely planted),UTLS,Understorey tree or large shrub,N,"coastal species, likely planted"
