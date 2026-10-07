@@ -582,7 +582,7 @@ def main():
     ap.add_argument('--catchment-region', default='Upper Catchment', help='LCRegion/Network value of the outline in --catchment')
     ap.add_argument('--lookup', default=str(HERE / 'understorey_lookup.csv'))
     ap.add_argument('--cache', default=str(HERE / 'cache'))
-    ap.add_argument('--out', default=str(HERE / 'biolinks_data.js'))
+    ap.add_argument('--out', default=str(HERE / 'inaturalist-map' / 'biolinks_data.js'))
     ap.add_argument('--unclassified', default=str(HERE / 'unclassified_plants.csv'))
     ap.add_argument('--check-parcel', action='append', default=[], help=r'print plant counts for a parcel SPI, e.g. S6\PP3207')
     args = ap.parse_args()

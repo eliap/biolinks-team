@@ -2,11 +2,12 @@
 
 Native understorey and habitat by parcel and roadside section for the Upper Wimmera (Project Platypus Biolinks Team), from iNaturalist plant records, Vicmap property and road data and DEECA native vegetation 2005 (EVC) mapping.
 
-**Open the map:** https://eliap.github.io/biolinks-team/
+**Open the map:** https://eliap.github.io/biolinks-team/inaturalist-map/
 
 ## Files
-- `pentland_creek_property_map.html` – the map viewer (Leaflet). Loads `biolinks_data.js` from the same folder; also works opened straight from disk.
-- `biolinks_data.js` – pre-processed map data.
+- `inaturalist-map/index.html` – the map viewer (Leaflet): where has nobody recorded plants on iNaturalist yet? Loads `biolinks_data.js` from the same folder; also works opened straight from disk.
+- `inaturalist-map/biolinks_data.js` – pre-processed map data.
+- `pentland_creek_property_map.html` – old link, redirects to the map.
 - `build_biolinks_data.py` – builds `biolinks_data.js` for the whole Upper Wimmera (or one group / a test square).
 - `biolinks_data_builder.html` – browser builder for small test squares (reference implementation).
 - `understorey_lookup.csv` – native / introduced / planted status and Habitat Hectares lifeform groups. Edit by hand, then rebuild.
@@ -23,7 +24,7 @@ python -m venv .venv
 .venv\Scripts\python build_biolinks_data.py --group "Navarre"
 .venv\Scripts\python build_biolinks_data.py --groups-only   # only land inside the Landcare groups
 ```
-Downloads are cached in `cache/` (not in the repo). Then commit and push `biolinks_data.js` to update the online map.
+Downloads are cached in `cache/` (not in the repo). The script writes `inaturalist-map/biolinks_data.js`; commit and push it to update the online map.
 
 ## Notes
 - iNaturalist records with obscured locations are not included, and records with GPS accuracy worse than 200 m are left out.

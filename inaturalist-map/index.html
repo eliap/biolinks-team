@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Biolinks Habitat Map</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
+<!-- Pre-processed data made by build_biolinks_data.py (or biolinks_data_builder.html for small test areas); must sit in the same folder as this map -->
+<script src="biolinks_data.js"></script>
+<style>
+  html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f4f4f0; }
+  #map { position: absolute; inset: 0; background: #ffffff; }
+  .grey-imagery { filter: grayscale(1) contrast(1.05); }
+  .panel {
+    position: absolute; top: 12px; left: 56px; z-index: 1000; width: 300px; max-height: calc(100% - 40px); overflow-y: auto;
+    background: rgba(255,255,255,0.96); color: #1f2420; border-radius: 8px; padding: 10px 14px; box-sizing: border-box;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.25); font-size: 13px; line-height: 1.4;
+  }
+  .panel h1 { font-size: 15px; margin: 0 0 4px; }
+  .panel h2 { font-size: 13px; margin: 12px 0 4px; }
+  .muted { color: #555; }
+  .small { color: #666; font-size: 12px; }
+  .key { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
+  .fill { width: 14px; height: 12px; border-radius: 2px; display: inline-block; border: 1px solid rgba(0,0,0,0.3); flex: none; }
+  .ctl { margin: 4px 0; }
+  .ctl label { margin-right: 8px; white-space: nowrap; }
+  select { font: inherit; max-width: 100%; }
+  .leaflet-popup-content { font-size: 13px; line-height: 1.4; }
+  .leaflet-popup-content h3 { font-size: 14px; margin: 0 0 4px; }
+  .leaflet-popup-content table { border-collapse: collapse; }
+  .leaflet-popup-content td { padding: 1px 8px 1px 0; vertical-align: top; }
+  .sp-list { max-height: 190px; overflow-y: auto; margin-top: 4px; border-top: 1px solid #eee; padding-top: 4px; }
+  .tag { font-size: 10.5px; font-weight: 600; border-radius: 3px; padding: 0 3px; margin-left: 3px; white-space: nowrap; }
+  .tag.intro { color: #b42318; background: #fde8e6; }
+  .tag.plant { color: #7a5a00; background: #fbf0cc; }
+  .tag.other { color: #555; background: #eee; }
+  .lf { color: #16809c; font-size: 11.5px; }
+  .chips span { display: inline-block; background: #e6f3f5; color: #0b4f6c; border-radius: 10px; padding: 0 7px; margin: 2px 3px 0 0; font-size: 11.5px; }
+  .sec { margin-top: 8px; border-top: 1px solid #ddd; padding-top: 6px; }
+  .err { color: #b42318; font-weight: 600; }
+  .gap { font-weight: 600; color: #7a5a00; }
+  @media (max-width: 600px) { .panel { left: 16px; right: 16px; top: auto; bottom: 24px; width: auto; max-height: 45%; } }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="panel">
+  <button id="toggle" style="float:right;font:inherit;font-size:12px;cursor:pointer">Hide</button>
+  <h1>Where has nobody looked yet?</h1>
+  <div id="panelBody">
+  <div class="muted" id="intro">Loading…</div>
+
+  <h2>Colour by</h2>
+  <div class="ctl">
+    <select id="countMode">
+      <option value="lf">Native understorey plant groups</option>
+      <option value="und">Native understorey species</option>
+      <option value="all">All plant species</option>
+      <option value="intro">Introduced species</option>
+    </select>
+  </div>
+  <div class="ctl">Show colour on:
+    <label><input type="radio" name="shade" value="veg" checked> native veg</label>
+    <label><input type="radio" name="shade" value="parcel"> whole parcel</label>
+  </div>
+  <div id="spLegend" class="small"></div>
+  <div class="small" id="notes" style="margin-top:8px"></div>
+  </div>
+</div>
+<script>
+const D = window.BIOLINKS_DATA;
+if (!D) {
+  document.getElementById('intro').innerHTML = '<span class="err">No data file found.</span> Run <b>build_biolinks_data.py</b> and keep <b>biolinks_data.js</b> in the same folder as this map. Then reload this page.';
+  throw new Error('biolinks_data.js missing');
+}
+
+// ---------- Decode compact geometry (integer deltas at 1e-5 degrees) ----------
+// Each shape keeps lon/lat rings (for clicks and turf) and Web Mercator rings scaled to 0–1 (for drawing).
+const mercV = lat => 0.5 - Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)) / (2 * Math.PI);
+function decodeShape(enc) {
+  const polys = [], mp = [];
+  let W = Infinity, S = Infinity, E = -Infinity, N = -Infinity;
+  for (const poly of enc) {
+    const rs = [], ms = [];
+    for (const ring of poly) {
+      const n = ring.length, ll = new Float64Array(n), m = new Float64Array(n);
+      let x = 0, y = 0;
+      for (let i = 0; i < n; i += 2) {
+        x += ring[i]; y += ring[i + 1];
+        const lon = x / 1e5, lat = y / 1e5;
+        ll[i] = lon; ll[i + 1] = lat; m[i] = (lon + 180) / 360; m[i + 1] = mercV(lat);
+        if (lon < W) W = lon; if (lon > E) E = lon; if (lat < S) S = lat; if (lat > N) N = lat;
+      }
+      rs.push(ll); ms.push(m);
+    }
+    polys.push(rs); mp.push(ms);
+  }
+  return { polys, mp, bb: [W, S, E, N], mb: [(W + 180) / 360, mercV(N), (E + 180) / 360, mercV(S)] };
+}
+function toGeoJSON(s) {
+  return { type: 'Feature', properties: {}, geometry: { type: 'MultiPolygon', coordinates: s.polys.map(rs => rs.map(r => {
+    const out = []; for (let i = 0; i < r.length; i += 2) out.push([r[i], r[i + 1]]); return out;
+  })) } };
+}
+function pointIn(s, x, y) {
+  const b = s.bb; if (x < b[0] || x > b[2] || y < b[1] || y > b[3]) return false;
+  for (const rs of s.polys) {
+    let inside = false;
+    for (const r of rs) for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) {
+      const xi = r[i], yi = r[i + 1], xj = r[j], yj = r[j + 1];
+      if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+    }
+    if (inside) return true;
+  }
+  return false;
+}
+function bboxOverlap(a, b) { return !(a[0] > b[2] || a[2] < b[0] || a[1] > b[3] || a[3] < b[1]); }
+function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+const LF = D.lifeforms;
+const EXCL = new Set(D.excludedLifeforms);
+// taxa: id -> [name, common, lifeform, origin (N/I/P), understorey (1/0), source, isSpecies (1/0)]
+const T = D.taxa;
+
+// ---------- Units: parcels & roadside sections ----------
+const newStats = () => ({ obsCount: 0, all: new Map(), und: new Set(), intro: new Set(), lfs: new Set() });
+const parcels = D.parcels.map(([spi, pfi, road, ha, g], i) => ({ i, spi, pfi, road, ha, shape: decodeShape(g), stats: newStats() }));
+const roadsides = D.roadsides.map(([road, lengthM, ha, g], i) => ({ i, road, lengthM, ha, shape: decodeShape(g), stats: newStats() }));
+const props = D.props.map(([pfi, propnum, addrs, g]) => ({ pfi, propnum, addrs, shape: decodeShape(g) }));
+for (const o of D.obs) {
+  const [, , id, , , , , kind, idx] = o;
+  if (!kind) continue;
+  const u = kind === 1 ? parcels[idx] : roadsides[idx];
+  const t = T[id]; if (!t || !u) continue;
+  const s = u.stats; s.obsCount++;
+  if (t[4] && t[2] && !EXCL.has(t[2])) s.lfs.add(t[2]);   // plant groups also count genus-level IDs
+  if (!t[6]) continue;                                    // species counts need a species-level ID
+  const e = s.all.get(id) || { id, n: 0 }; e.n++; s.all.set(id, e);
+  if (t[4]) s.und.add(id);
+  if (t[3] === 'I') s.intro.add(id);
+}
+
+// ---------- Map ----------
+const map = L.map('map', { zoomControl: true, maxZoom: 19 });
+const imagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+  maxZoom: 19, opacity: 0.55, className: 'grey-imagery', attribution: 'Imagery © Esri, Maxar, Earthstar Geographics'
+}).addTo(map);
+// OpenStreetMap's own tile servers block pages opened from a local file, so use Esri basemaps
+const topo = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Basemap © Esri and contributors' });
+
+map.createPane('species'); map.getPane('species').style.zIndex = 390;
+map.createPane('roads');   map.getPane('roads').style.zIndex = 395;
+for (const p of ['species', 'roads']) map.getPane(p).style.pointerEvents = 'none';
+
+// Canvas tile layers: each 256 px tile draws only the shapes that touch it, so tens of thousands
+// of polygons stay responsive (Leaflet only draws the tiles in view, and caches them while panning).
+const PolyTiles = L.GridLayer.extend({
+  options: { maxZoom: 22, updateWhenZooming: false, keepBuffer: 3 },
+  createTile(c) {
+    const tile = document.createElement('canvas'), r = window.devicePixelRatio || 1;
+    tile.width = tile.height = 256 * r;
+    const ctx = tile.getContext('2d'); ctx.scale(r, r); ctx.lineJoin = 'round';
+    const scale = 256 * Math.pow(2, c.z), ox = c.x * 256, oy = c.y * 256, pad = 6 / scale;
+    const tb = [ox / scale - pad, oy / scale - pad, (ox + 256) / scale + pad, (oy + 256) / scale + pad];
+    this.options.draw(ctx, tb, scale, ox, oy);
+    return tile;
+  }
+});
+function drawShapes(items, styleOf) {
+  return (ctx, tb, scale, ox, oy) => {
+    for (const it of items()) {
+      const s = it.s, b = s.mb;
+      if (b[0] > tb[2] || b[2] < tb[0] || b[1] > tb[3] || b[3] < tb[1]) continue;
+      const st = styleOf(it); if (!st) continue;
+      const w = (b[2] - b[0]) * scale, h = (b[3] - b[1]) * scale;
+      if (w < 1.5 && h < 1.5) {                 // smaller than a pixel or so: a dot of colour
+        ctx.globalAlpha = Math.max(st.fillOpacity, 0.6); ctx.fillStyle = st.fill;
+        ctx.fillRect(b[0] * scale - ox, b[1] * scale - oy, Math.max(w, 1), Math.max(h, 1));
+        continue;
+      }
+      ctx.beginPath();
+      for (const poly of s.mp) for (const ring of poly) {
+        for (let i = 0; i < ring.length; i += 2) {
+          const x = ring[i] * scale - ox, y = ring[i + 1] * scale - oy;
+          if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        }
+        ctx.closePath();
+      }
+      ctx.globalAlpha = st.fillOpacity; ctx.fillStyle = st.fill; ctx.fill('evenodd');
+      ctx.globalAlpha = st.opacity; ctx.strokeStyle = st.color; ctx.lineWidth = st.weight; ctx.stroke();
+    }
+  };
+}
+
+// ---------- Colour scales: yellow-green (low) to deep turquoise-blue (high) ----------
+const COLS = ['#d9ef7a', '#a6d96a', '#66c18f', '#2fa7a0', '#16809c', '#0b4f6c'];
+const BINS = {
+  lf: [[1, 1], [2, 2], [3, 3], [4, 5], [6, 7], [8, Infinity]],
+  sp: [[1, 1], [2, 3], [4, 6], [7, 10], [11, 20], [21, Infinity]]
+};
+const NO_RECORDS = '#e3cf9f';
+let countMode = 'lf', shadeMode = 'veg';
+const bins = () => countMode === 'lf' ? BINS.lf : BINS.sp;
+function count(u) {
+  const s = u.stats;
+  return countMode === 'lf' ? s.lfs.size : countMode === 'und' ? s.und.size : countMode === 'intro' ? s.intro.size : s.all.size;
+}
+function binIndex(n) { const b = bins(); for (let i = 0; i < b.length; i++) if (n >= b[i][0] && n <= b[i][1]) return i; return COLS.length - 1; }
+const NONE = { stats: newStats() };
+const UNIT_STY = COLS.map(c => ({ color: c, weight: 0.6, opacity: 1, fill: c, fillOpacity: 0.85 }));
+const UNIT_NONE = { color: '#a58a4f', weight: 0.5, opacity: 0.7, fill: NO_RECORDS, fillOpacity: 0.5 };
+const ROAD_STY = COLS.map(c => ({ color: c, weight: 0.6, opacity: 1, fill: c, fillOpacity: 0.8 }));
+const ROAD_NONE = { color: '#a58a4f', weight: 0.4, opacity: 0.6, fill: NO_RECORDS, fillOpacity: 0.4 };
+const unitStyle = it => { const n = count(it.u); return n ? UNIT_STY[binIndex(n)] : UNIT_NONE; };
+const roadStyle = it => { const n = count(it.u); return n ? ROAD_STY[binIndex(n)] : ROAD_NONE; };
+
+// ---------- Layers ----------
+const vegShapes = D.veg.map(([, g]) => decodeShape(g));
+let speciesItems = [];
+const speciesLayer = new PolyTiles({ pane: 'species', draw: drawShapes(() => speciesItems, unitStyle) }).addTo(map);
+const roadItems = roadsides.map(r => ({ s: r.shape, u: r }));
+const roadsideLayer = new PolyTiles({ pane: 'roads', draw: drawShapes(() => roadItems, roadStyle) }).addTo(map);
+
+L.control.layers({ 'Satellite imagery': imagery, 'Topographic (Esri)': topo}, null, { collapsed: true }).addTo(map);
+L.control.scale({ imperial: false }).addTo(map);
+
+function vegPiecesOf(p) {
+  const pv = D.parcelVeg[p.i];
+  if (pv && !p._veg) p._veg = pv[1].map(decodeShape);
+  return p._veg || [];
+}
+function buildSpeciesLayer() {
+  const items = [];
+  if (shadeMode === 'parcel') {
+    for (const p of parcels) items.push({ s: p.shape, u: p });
+  } else {
+    for (const s of vegShapes) items.push({ s, u: NONE });                           // base: all native veg as 'no records'
+    for (const p of parcels) if (p.stats.obsCount) for (const s of vegPiecesOf(p)) items.push({ s, u: p });
+  }
+  speciesItems = items;
+  speciesLayer.redraw();
+  updateLegend();
+}
+const modeLabel = () => ({ lf: 'understorey plant groups', und: 'native understorey species', all: 'plant species', intro: 'introduced species' }[countMode]);
+function updateLegend() {
+  const label = modeLabel();
+  document.getElementById('spLegend').innerHTML =
+    '<div class="key"><span class="fill" style="background:' + NO_RECORDS + '"></span><span class="gap">No records yet – a gap to explore</span></div>' +
+    bins().map((b, i) =>
+      '<div class="key"><span class="fill" style="background:' + COLS[i] + '"></span>' +
+      (b[1] === Infinity ? b[0] + '+' : b[0] === b[1] ? b[0] : b[0] + '–' + b[1]) + ' ' + label + '</div>').join('');
+}
+
+// ---------- Popups ----------
+function tags(t) {
+  return (t[3] === 'I' ? '<span class="tag intro">INTRODUCED</span>' : '') +
+         (t[3] === 'P' ? '<span class="tag plant">PLANTED / NOT LOCAL</span>' : '') +
+         (t[3] === 'N' && !t[4] ? '<span class="tag other">' + (t[2] === 'TREE' ? 'TREE' : t[2] === 'MIS' ? 'MISTLETOE' : 'NOT UNDERSTOREY') + '</span>' : '') +
+         (t[5] === 'unclassified' ? '<span class="tag other">UNCLASSIFIED</span>' : '');
+}
+function statsHtml(s) {
+  if (!s.obsCount) return '</table><div class="gap" style="margin-top:4px">No iNaturalist plant records yet – worth a look!</div>';
+  let h = '<tr><td>iNat plant records</td><td>' + s.obsCount + '</td></tr>' +
+    '<tr><td>Understorey plant groups</td><td><b>' + s.lfs.size + '</b></td></tr>' +
+    '<tr><td>Native understorey species</td><td><b>' + s.und.size + '</b></td></tr>' +
+    '<tr><td>All plant species</td><td>' + s.all.size + ' (' + s.intro.size + ' introduced)</td></tr></table>';
+  if (s.lfs.size) h += '<div class="chips">' + [...s.lfs].map(c => '<span>' + esc(LF[c]) + '</span>').join('') + '</div>';
+  if (s.all.size) {
+    const rows = [...s.all.values()].map(e => ({ e, t: T[e.id] }))
+      .sort((a, b) => (b.t[4] - a.t[4]) || ((a.t[3] === 'I') - (b.t[3] === 'I')) || a.t[0].localeCompare(b.t[0]));
+    h += '<div class="sp-list">' + rows.map(({ e, t }) =>
+      '<div><a href="https://www.inaturalist.org/taxa/' + e.id + '" target="_blank" rel="noopener"><i>' + esc(t[0]) + '</i></a>' +
+      (t[1] ? ' – ' + esc(t[1]) : '') + tags(t) + ' <span class="small">×' + e.n + '</span>' +
+      (t[2] ? ' <span class="lf">' + esc(LF[t[2]]) + '</span>' : '') + '</div>').join('') + '</div>';
+  }
+  return h;
+}
+const vegHaCache = {};
+function vegHa(p) {
+  if (D.parcelVeg[p.i]) return D.parcelVeg[p.i][0];
+  if (p.i in vegHaCache) return vegHaCache[p.i];
+  let ha = 0; const pf = toGeoJSON(p.shape);
+  for (const v of vegShapes) {
+    if (!bboxOverlap(p.shape.bb, v.bb)) continue;
+    try { const x = turf.intersect(pf, toGeoJSON(v)); if (x) ha += turf.area(x) / 10000; } catch (e) {}
+  }
+  return (vegHaCache[p.i] = ha);
+}
+// keep popups clear of the side panel on wide screens
+function panelPad() {
+  const el = document.querySelector('.panel');
+  return window.innerWidth > 600 && el && document.getElementById('panelBody').style.display !== 'none' ? el.offsetLeft + el.offsetWidth + 10 : 0;
+}
+map.on('click', e => {
+  const lng = e.latlng.lng, lat = e.latlng.lat;
+  const hit = arr => arr.find(u => pointIn(u.shape, lng, lat));
+  const parcel = hit(parcels);
+  const road = parcel ? null : hit(roadsides);
+  const prop = parcel ? hit(props) : null;
+  let html = '';
+  if (road) {
+    html += '<h3>Roadside: ' + esc(road.road) + '</h3><table>' +
+      (road.lengthM ? '<tr><td>Section length</td><td>~' + Math.round(road.lengthM / 10) * 10 + ' m</td></tr>' : '') +
+      '<tr><td>Reserve area</td><td>' + road.ha.toFixed(2) + ' ha</td></tr>' + statsHtml(road.stats);
+  }
+  if (parcel) {
+    const vh = vegHa(parcel);
+    html += '<h3>Parcel ' + esc(parcel.spi || parcel.pfi) + (parcel.road ? ' <span class="small">(road)</span>' : '') + '</h3><table>' +
+      '<tr><td>Area</td><td>' + parcel.ha.toFixed(1) + ' ha</td></tr>' +
+      '<tr><td>Native veg (2005)</td><td>' + vh.toFixed(1) + ' ha (' + Math.round(100 * vh / parcel.ha) + '%)</td></tr>' + statsHtml(parcel.stats);
+  }
+  if (prop) {
+    html += '<div class="sec"><b>Property:</b> ' + esc(prop.addrs[0] || 'No address recorded') +
+      (prop.addrs.length > 1 ? ' <span class="small">+' + (prop.addrs.length - 1) + ' more</span>' : '') +
+      '<br><span class="small">' + (turf.area(toGeoJSON(prop.shape)) / 10000).toFixed(1) + ' ha · council prop. no. ' + esc(prop.propnum || '—') + '</span></div>';
+  }
+  if (html) L.popup({ minWidth: 300, maxWidth: 400, autoPanPaddingTopLeft: [panelPad() + 10, 10] }).setLatLng(e.latlng).setContent(html).openOn(map);
+});
+
+// ---------- Fit & panel text ----------
+const bb = D.catchment ? decodeShape(D.catchment[1]).bb : D.meta.bbox;
+map.fitBounds([[bb[1], bb[0]], [bb[3], bb[2]]], { paddingTopLeft: [panelPad() + 20, 20], paddingBottomRight: [20, 20] });
+const built = new Date(D.meta.built).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+document.getElementById('intro').innerHTML =
+  'Sandy areas have <b>no iNaturalist plant records yet</b>. Pick one, go for a walk (with permission on private land), and record what you find. Click anywhere for details.';
+document.getElementById('notes').innerHTML =
+  '“Native veg” colours only mapped native vegetation (2005) and roadside reserves; “whole parcel” colours every parcel. Records with hidden locations aren’t shown. Data built ' + built + '.';
+buildSpeciesLayer();
+
+document.getElementById('toggle').addEventListener('click', e => { const b = document.getElementById('panelBody'); const hide = b.style.display !== 'none'; b.style.display = hide ? 'none' : ''; e.target.textContent = hide ? 'Show' : 'Hide'; });
+document.getElementById('countMode').addEventListener('change', e => { countMode = e.target.value; speciesLayer.redraw(); roadsideLayer.redraw(); updateLegend(); });
+document.querySelectorAll('input[name=shade]').forEach(r => r.addEventListener('change', e => { shadeMode = e.target.value; buildSpeciesLayer(); }));
+</script>
+</body>
+</html>
