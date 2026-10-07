@@ -41,6 +41,9 @@
   .sec { margin-top: 8px; border-top: 1px solid #ddd; padding-top: 6px; }
   .err { color: #b42318; font-weight: 600; }
   .gap { font-weight: 600; color: #7a5a00; }
+  .goal { margin: 4px 0 6px; color: #1f2420; }
+  .steps { margin: 0; padding-left: 18px; color: #333; }
+  .steps li { margin: 3px 0; }
   @media (max-width: 600px) { .panel { left: 16px; right: 16px; top: auto; bottom: 24px; width: auto; max-height: 45%; } }
 </style>
 </head>
@@ -324,7 +327,12 @@ const bb = D.catchment ? decodeShape(D.catchment[1]).bb : D.meta.bbox;
 map.fitBounds([[bb[1], bb[0]], [bb[3], bb[2]]], { paddingTopLeft: [panelPad() + 20, 20], paddingBottomRight: [20, 20] });
 const built = new Date(D.meta.built).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 document.getElementById('intro').innerHTML =
-  'Sandy areas have <b>no iNaturalist plant records yet</b>. Pick one, go for a walk (with permission on private land), and record what you find. Click anywhere for details.';
+  '<p class="goal"><b>Our goal:</b> find out where native understorey plants still grow across the Upper Wimmera, so the Biolinks Team knows which patches to protect and link up.</p>' +
+  '<ol class="steps">' +
+  '<li><b>Find your block.</b> Use the layers button (top right) to switch between <b>satellite</b> view and <b>topographic</b> view, which shows roads and place names.</li>' +
+  '<li><b>Look for sandy-coloured areas.</b> Nobody has recorded plants there on iNaturalist yet. Greens and blues show where people already have.</li>' +
+  '<li><b>Click a parcel or roadside</b> for details, then go for a walk (with permission on private land) and photograph the plants you find in iNaturalist.</li>' +
+  '</ol>';
 document.getElementById('notes').innerHTML =
   '“Native veg” colours only mapped native vegetation (2005) and roadside reserves; “whole parcel” colours every parcel. Records with hidden locations aren’t shown. Data built ' + built + '.';
 buildSpeciesLayer();
