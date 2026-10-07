@@ -14,19 +14,16 @@
   #map { position: absolute; inset: 0; background: #ffffff; }
   .grey-imagery { filter: grayscale(1) contrast(1.05); }
   .panel {
-    position: absolute; top: 12px; left: 56px; z-index: 1000; width: 330px; max-height: calc(100% - 40px); overflow-y: auto;
-    background: rgba(255,255,255,0.96); border-radius: 8px; padding: 10px 14px; box-sizing: border-box;
+    position: absolute; top: 12px; left: 56px; z-index: 1000; width: 300px; max-height: calc(100% - 40px); overflow-y: auto;
+    background: rgba(255,255,255,0.96); color: #1f2420; border-radius: 8px; padding: 10px 14px; box-sizing: border-box;
     box-shadow: 0 1px 6px rgba(0,0,0,0.25); font-size: 13px; line-height: 1.4;
   }
   .panel h1 { font-size: 15px; margin: 0 0 4px; }
   .panel h2 { font-size: 13px; margin: 12px 0 4px; }
   .muted { color: #555; }
   .small { color: #666; font-size: 12px; }
-  .status { margin-top: 8px; font-weight: 600; }
   .key { display: flex; align-items: center; gap: 6px; margin-top: 3px; }
-  .sw { width: 18px; height: 0; border-top: 3px solid; display: inline-block; flex: none; }
   .fill { width: 14px; height: 12px; border-radius: 2px; display: inline-block; border: 1px solid rgba(0,0,0,0.3); flex: none; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; border: 1.5px solid #222; flex: none; }
   .ctl { margin: 4px 0; }
   .ctl label { margin-right: 8px; white-space: nowrap; }
   select { font: inherit; max-width: 100%; }
@@ -43,23 +40,7 @@
   .chips span { display: inline-block; background: #e6f3f5; color: #0b4f6c; border-radius: 10px; padding: 0 7px; margin: 2px 3px 0 0; font-size: 11.5px; }
   .sec { margin-top: 8px; border-top: 1px solid #ddd; padding-top: 6px; }
   .err { color: #b42318; font-weight: 600; }
-  #groupBox { margin-top: 8px; padding: 8px 10px; background: #f3f6f4; border-radius: 6px; }
-  #groupBox select { width: 100%; margin-top: 2px; }
-  .gsum table { border-collapse: collapse; width: 100%; margin-top: 6px; }
-  .gsum td { padding: 1px 0; }
-  .gsum td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
-  .gsum h3 { font-size: 12.5px; margin: 8px 0 2px; }
-  .gsum ol { margin: 0; padding-left: 20px; }
-  .gsum li { margin: 1px 0; }
-  .gsum a { color: #0b4f6c; cursor: pointer; text-decoration: underline; text-decoration-color: #9cc; }
-  .gsum .n { float: right; font-variant-numeric: tabular-nums; font-weight: 600; }
-  details summary { cursor: pointer; }
-  .group-label { background: none; border: none; }
-  .group-label span {
-    display: inline-block; transform: translate(-50%, -50%); white-space: nowrap; font-weight: 700; font-size: 12px; color: #3d1a5e;
-    text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 2px #fff, 0 0 1px #fff; pointer-events: none;
-  }
-  .group-label.sel span { font-size: 13.5px; color: #24073f; }
+  .gap { font-weight: 600; color: #7a5a00; }
   @media (max-width: 600px) { .panel { left: 16px; right: 16px; top: auto; bottom: 24px; width: auto; max-height: 45%; } }
 </style>
 </head>
@@ -67,55 +48,33 @@
 <div id="map"></div>
 <div class="panel">
   <button id="toggle" style="float:right;font:inherit;font-size:12px;cursor:pointer">Hide</button>
-  <h1>Native understorey &amp; habitat by parcel</h1>
+  <h1>Where has nobody looked yet?</h1>
   <div id="panelBody">
   <div class="muted" id="intro">Loading…</div>
 
-  <div id="groupBox" style="display:none">
-    <label for="groupSel"><b>Landcare group</b></label>
-    <select id="groupSel"><option value="all">All groups</option></select>
-    <div id="groupSummary" class="gsum"></div>
-  </div>
-
-  <h2>Colour parcels and roadsides by</h2>
+  <h2>Colour by</h2>
   <div class="ctl">
     <select id="countMode">
-      <option value="lf">Native understorey plant groups (habitat intactness)</option>
+      <option value="lf">Native understorey plant groups</option>
       <option value="und">Native understorey species</option>
       <option value="all">All plant species</option>
       <option value="intro">Introduced species</option>
     </select>
   </div>
   <div class="ctl">Show colour on:
-    <label><input type="radio" name="shade" value="veg" checked> native veg in parcel</label>
+    <label><input type="radio" name="shade" value="veg" checked> native veg</label>
     <label><input type="radio" name="shade" value="parcel"> whole parcel</label>
   </div>
   <div id="spLegend" class="small"></div>
-
-  <h2>Boundaries &amp; records <span class="small">– off by default</span></h2>
-  <div class="key"><span class="sw" style="border-color:#262626;border-top-width:2px"></span> Property (rateable assessment)</div>
-  <div class="key"><span class="sw" style="border-color:#7a7a7a;border-top-width:1px"></span> Parcel (lot / Crown allotment)</div>
-  <div class="key" id="areaKey"><span class="sw" style="border-color:#ff3b30;border-top-style:dashed"></span> Study area</div>
-  <div class="key"><span class="dot" style="background:#ffffff"></span> iNat record – native understorey</div>
-  <div class="key"><span class="dot" style="background:#9e9e9e"></span> iNat record – native tree, mistletoe or planted</div>
-  <div class="key"><span class="dot" style="background:#ff6b6b"></span> iNat record – introduced</div>
-
-  <h2>Native vegetation 2005 (EVC) <span class="small">– off by default</span></h2>
-  <details><summary class="small">Show EVC colour key</summary><div id="vegLegend" class="small"></div></details>
-
-  <div class="status" id="status">Loading data…</div>
-  <div class="small" id="notes" style="margin-top:6px"></div>
+  <div class="small" id="notes" style="margin-top:8px"></div>
   </div>
 </div>
 <script>
 const D = window.BIOLINKS_DATA;
-const status = document.getElementById('status');
 if (!D) {
-  status.innerHTML = '<span class="err">No data file found.</span>';
-  document.getElementById('intro').innerHTML = 'Run <b>build_biolinks_data.py</b> (or open <b>biolinks_data_builder.html</b> for a small test area) and save <b>biolinks_data.js</b> in the same folder as this map. Then reload this page.';
+  document.getElementById('intro').innerHTML = '<span class="err">No data file found.</span> Run <b>build_biolinks_data.py</b> and keep <b>biolinks_data.js</b> in the same folder as this map. Then reload this page.';
   throw new Error('biolinks_data.js missing');
 }
-const t0 = performance.now();
 
 // ---------- Decode compact geometry (integer deltas at 1e-5 degrees) ----------
 // Each shape keeps lon/lat rings (for clicks and turf) and Web Mercator rings scaled to 0–1 (for drawing).
@@ -159,26 +118,16 @@ function pointIn(s, x, y) {
 }
 function bboxOverlap(a, b) { return !(a[0] > b[2] || a[2] < b[0] || a[1] > b[3] || a[3] < b[1]); }
 function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
-const fmt = n => Math.round(n).toLocaleString();
 
-const [W, S, E, N] = D.meta.bbox;
 const LF = D.lifeforms;
 const EXCL = new Set(D.excludedLifeforms);
 // taxa: id -> [name, common, lifeform, origin (N/I/P), understorey (1/0), source, isSpecies (1/0)]
 const T = D.taxa;
 
-// ---------- Landcare groups (added by build_biolinks_data.py; absent in browser-builder test files) ----------
-const groups = (D.groups || []).map(([name, abbr, g], i) => ({ i, name, abbr, short: name.replace(/\s+Landcare Group$/i, ''), shape: decodeShape(g), stats: (D.groupStats || [])[i] }));
-const hasGroups = groups.length > 0;
-// whole Upper Wimmera outline: [name, geom, [areaHa, nativeVegHa] of the land not in any group]
-const CATCH = D.catchment ? { name: D.catchment[0], shape: decodeShape(D.catchment[1]), outside: D.catchment[2] } : null;
-const NO_GROUP = -2;   // selGroup value for 'Not in a Landcare group'
-const PG = D.parcelGroup || [], RG = D.roadsideGroup || [], OG = D.obsGroup || [];
-
 // ---------- Units: parcels & roadside sections ----------
 const newStats = () => ({ obsCount: 0, all: new Map(), und: new Set(), intro: new Set(), lfs: new Set() });
-const parcels = D.parcels.map(([spi, pfi, road, ha, g], i) => ({ i, kind: 1, spi, pfi, road, ha, shape: decodeShape(g), grp: PG[i] ?? -1, stats: newStats() }));
-const roadsides = D.roadsides.map(([road, lengthM, ha, g], i) => ({ i, kind: 2, road, lengthM, ha, shape: decodeShape(g), grp: RG[i] ?? -1, stats: newStats() }));
+const parcels = D.parcels.map(([spi, pfi, road, ha, g], i) => ({ i, spi, pfi, road, ha, shape: decodeShape(g), stats: newStats() }));
+const roadsides = D.roadsides.map(([road, lengthM, ha, g], i) => ({ i, road, lengthM, ha, shape: decodeShape(g), stats: newStats() }));
 const props = D.props.map(([pfi, propnum, addrs, g]) => ({ pfi, propnum, addrs, shape: decodeShape(g) }));
 for (const o of D.obs) {
   const [, , id, , , , , kind, idx] = o;
@@ -198,18 +147,12 @@ const map = L.map('map', { zoomControl: true, maxZoom: 19 });
 const imagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
   maxZoom: 19, opacity: 0.55, className: 'grey-imagery', attribution: 'Imagery © Esri, Maxar, Earthstar Geographics'
 }).addTo(map);
-// OpenStreetMap's own tile servers block pages opened from a local file, so use Esri / CARTO basemaps
+// OpenStreetMap's own tile servers block pages opened from a local file, so use Esri basemaps
 const topo = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19, attribution: 'Basemap © Esri and contributors' });
-const osm = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', { maxZoom: 19, subdomains: 'abcd', attribution: '© OpenStreetMap contributors © CARTO' });
 
-map.createPane('veg');     map.getPane('veg').style.zIndex = 380;
 map.createPane('species'); map.getPane('species').style.zIndex = 390;
 map.createPane('roads');   map.getPane('roads').style.zIndex = 395;
-map.createPane('lines');   map.getPane('lines').style.zIndex = 410;
-map.createPane('groups');  map.getPane('groups').style.zIndex = 415;
-map.createPane('obs');     map.getPane('obs').style.zIndex = 620;
-map.createPane('glabels'); map.getPane('glabels').style.zIndex = 630; map.getPane('glabels').style.pointerEvents = 'none';
-for (const p of ['veg', 'species', 'roads', 'lines', 'groups', 'obs']) map.getPane(p).style.pointerEvents = 'none';
+for (const p of ['species', 'roads']) map.getPane(p).style.pointerEvents = 'none';
 
 // Canvas tile layers: each 256 px tile draws only the shapes that touch it, so tens of thousands
 // of polygons stay responsive (Leaflet only draws the tiles in view, and caches them while panning).
@@ -233,8 +176,7 @@ function drawShapes(items, styleOf) {
       const st = styleOf(it); if (!st) continue;
       const w = (b[2] - b[0]) * scale, h = (b[3] - b[1]) * scale;
       if (w < 1.5 && h < 1.5) {                 // smaller than a pixel or so: a dot of colour
-        const col = st.fill || st.color; if (!col) continue;
-        ctx.globalAlpha = st.fill ? Math.max(st.fillOpacity, 0.6) : st.opacity; ctx.fillStyle = col;
+        ctx.globalAlpha = Math.max(st.fillOpacity, 0.6); ctx.fillStyle = st.fill;
         ctx.fillRect(b[0] * scale - ox, b[1] * scale - oy, Math.max(w, 1), Math.max(h, 1));
         continue;
       }
@@ -246,13 +188,8 @@ function drawShapes(items, styleOf) {
         }
         ctx.closePath();
       }
-      if (st.fill) { ctx.globalAlpha = st.fillOpacity; ctx.fillStyle = st.fill; ctx.fill('evenodd'); }
-      if (st.weight) {
-        ctx.globalAlpha = st.opacity; ctx.strokeStyle = st.color; ctx.lineWidth = st.weight;
-        if (st.dash) ctx.setLineDash(st.dash);
-        ctx.stroke();
-        if (st.dash) ctx.setLineDash([]);
-      }
+      ctx.globalAlpha = st.fillOpacity; ctx.fillStyle = st.fill; ctx.fill('evenodd');
+      ctx.globalAlpha = st.opacity; ctx.strokeStyle = st.color; ctx.lineWidth = st.weight; ctx.stroke();
     }
   };
 }
@@ -264,14 +201,13 @@ const BINS = {
   sp: [[1, 1], [2, 3], [4, 6], [7, 10], [11, 20], [21, Infinity]]
 };
 const NO_RECORDS = '#e3cf9f';
-let countMode = 'lf', shadeMode = 'veg', selGroup = -1;
+let countMode = 'lf', shadeMode = 'veg';
 const bins = () => countMode === 'lf' ? BINS.lf : BINS.sp;
 function count(u) {
   const s = u.stats;
   return countMode === 'lf' ? s.lfs.size : countMode === 'und' ? s.und.size : countMode === 'intro' ? s.intro.size : s.all.size;
 }
 function binIndex(n) { const b = bins(); for (let i = 0; i < b.length; i++) if (n >= b[i][0] && n <= b[i][1]) return i; return COLS.length - 1; }
-function colour(n) { return COLS[binIndex(n)]; }
 const NONE = { stats: newStats() };
 const UNIT_STY = COLS.map(c => ({ color: c, weight: 0.6, opacity: 1, fill: c, fillOpacity: 0.85 }));
 const UNIT_NONE = { color: '#a58a4f', weight: 0.5, opacity: 0.7, fill: NO_RECORDS, fillOpacity: 0.5 };
@@ -281,89 +217,13 @@ const unitStyle = it => { const n = count(it.u); return n ? UNIT_STY[binIndex(n)
 const roadStyle = it => { const n = count(it.u); return n ? ROAD_STY[binIndex(n)] : ROAD_NONE; };
 
 // ---------- Layers ----------
-const EVC_COLOURS = ['#1a9850', '#b8e186', '#8e6bbf', '#f28e2b', '#e7298a', '#4dac26', '#8c510a', '#80cdc1', '#c51b7d', '#fee08b', '#7570b3', '#d95f02'];
-const evcN = D.evcs.map(() => 0), evcColour = {};
-const vegItems = D.veg.map(([e, g]) => (evcN[e]++, { s: decodeShape(g), e }));
-D.evcs.map((e, i) => i).sort((a, b) => evcN[b] - evcN[a]).forEach((i, k) => evcColour[i] = EVC_COLOURS[k % EVC_COLOURS.length]);
-const EVC_STY = {}; for (const i in evcColour) EVC_STY[i] = { color: evcColour[i], weight: 0.5, opacity: 0.9, fill: evcColour[i], fillOpacity: 0.65 };
-const vegLayer = new PolyTiles({ pane: 'veg', draw: drawShapes(() => vegItems, it => EVC_STY[it.e]) });
-
+const vegShapes = D.veg.map(([, g]) => decodeShape(g));
 let speciesItems = [];
 const speciesLayer = new PolyTiles({ pane: 'species', draw: drawShapes(() => speciesItems, unitStyle) }).addTo(map);
 const roadItems = roadsides.map(r => ({ s: r.shape, u: r }));
 const roadsideLayer = new PolyTiles({ pane: 'roads', draw: drawShapes(() => roadItems, roadStyle) }).addTo(map);
-const parcelItems = parcels.map(p => ({ s: p.shape }));
-const PARCEL_STY = { color: '#7a7a7a', weight: 0.8, opacity: 0.9 };
-const parcelLayer = new PolyTiles({ pane: 'lines', draw: drawShapes(() => parcelItems, () => PARCEL_STY) });
-const propItems = props.map(p => ({ s: p.shape }));
-const PROP_STY = { color: '#262626', weight: 2, opacity: 0.9 };
-const propertyLayer = new PolyTiles({ pane: 'lines', draw: drawShapes(() => propItems, () => PROP_STY) });
 
-function tags(t) {
-  return (t[3] === 'I' ? '<span class="tag intro">INTRODUCED</span>' : '') +
-         (t[3] === 'P' ? '<span class="tag plant">PLANTED / NOT LOCAL</span>' : '') +
-         (t[3] === 'N' && !t[4] ? '<span class="tag other">' + (t[2] === 'TREE' ? 'TREE' : t[2] === 'MIS' ? 'MISTLETOE' : 'NOT UNDERSTOREY') + '</span>' : '') +
-         (t[5] === 'unclassified' ? '<span class="tag other">UNCLASSIFIED</span>' : '');
-}
-const UNKNOWN = ['Unknown', '', '', 'N', 0, 'unclassified', 0];
-const obsPts = D.obs.map((o, k) => {
-  const t = T[o[2]] || UNKNOWN;
-  return { k, u: (o[0] + 180) / 360, v: mercV(o[1]), fill: t[3] === 'I' ? '#ff6b6b' : t[4] ? '#ffffff' : '#9e9e9e' };
-});
-const obsLayer = new PolyTiles({ pane: 'obs', draw: (ctx, tb, scale, ox, oy) => {
-  ctx.lineWidth = 1.2; ctx.strokeStyle = '#222';
-  for (const p of obsPts) {
-    if (p.u < tb[0] || p.u > tb[2] || p.v < tb[1] || p.v > tb[3]) continue;
-    ctx.beginPath(); ctx.arc(p.u * scale - ox, p.v * scale - oy, 4, 0, 2 * Math.PI);
-    ctx.fillStyle = p.fill; ctx.fill(); ctx.stroke();
-  }
-} });
-function obsPopup(k) {
-  const [, , id, , date, rg, obsId] = D.obs[k];
-  const t = T[id] || UNKNOWN;
-  return '<i>' + esc(t[0]) + '</i>' + (t[1] ? ' – ' + esc(t[1]) : '') + tags(t) +
-    (t[2] ? '<div class="lf">' + esc(LF[t[2]]) + '</div>' : '<br>') +
-    '<span class="small">' + esc(date) + ' · ' + (rg ? 'Research grade' : 'Needs ID') + '</span><br>' +
-    '<a href="https://www.inaturalist.org/observations/' + obsId + '" target="_blank" rel="noopener">Open on iNaturalist</a>';
-}
-
-// ---------- Group boundaries (or the study square for browser-builder files) ----------
-let areaLayer, groupOutline, allBounds;
-const groupLabels = [];
-const G_STY = { color: '#5b2a86', weight: 2, opacity: 0.85, fill: false, interactive: false };
-const G_SEL = { color: '#2b0a4a', weight: 4, opacity: 1, fill: false, interactive: false };
-if (hasGroups) {
-  groupOutline = L.geoJSON({ type: 'FeatureCollection', features: groups.map(g => (Object.assign(toGeoJSON(g.shape), { properties: { i: g.i } }))) },
-    { pane: 'groups', interactive: false, style: f => f.properties.i === selGroup ? G_SEL : G_STY });
-  areaLayer = L.layerGroup([groupOutline]);
-  for (const g of groups) {
-    const f = toGeoJSON(g.shape);
-    let c = turf.centerOfMass(f).geometry.coordinates;
-    if (!pointIn(g.shape, c[0], c[1])) c = turf.pointOnFeature(f).geometry.coordinates;
-    g.label = c;
-    const m = L.marker([c[1], c[0]], { pane: 'glabels', interactive: false, keyboard: false,
-      icon: L.divIcon({ className: 'group-label', html: '<span>' + esc(g.short) + '</span>', iconSize: null }) });
-    groupLabels.push(m); areaLayer.addLayer(m);
-  }
-  if (CATCH) areaLayer.addLayer(L.geoJSON(toGeoJSON(CATCH.shape), { pane: 'groups', interactive: false,
-    style: { color: '#1f1f1f', weight: 2.5, opacity: 0.8, dashArray: '8 6', fill: false } }));
-  areaLayer.addTo(map);
-  allBounds = groups.reduce((a, g) => [Math.min(a[0], g.shape.bb[0]), Math.min(a[1], g.shape.bb[1]), Math.max(a[2], g.shape.bb[2]), Math.max(a[3], g.shape.bb[3])], [180, 90, -180, -90]);
-  if (CATCH) allBounds = CATCH.shape.bb.slice();
-  document.getElementById('areaKey').innerHTML = '<span class="sw" style="border-color:#5b2a86;border-top-width:2px"></span> Landcare group boundary <span class="small">(on)</span>' +
-    (CATCH ? '</div><div class="key"><span class="sw" style="border-color:#1f1f1f;border-top-style:dashed"></span> ' + esc(CATCH.name) + ' boundary <span class="small">(on)</span>' : '');
-} else {
-  areaLayer = L.rectangle([[S, W], [N, E]], { color: '#ff3b30', weight: 2, dashArray: '6 6', fill: false, interactive: false }).addTo(map);
-  allBounds = [W, S, E, N];
-}
-
-L.control.layers(
-  { 'Satellite imagery': imagery, 'Topographic (Esri)': topo, 'Street map (OSM / CARTO)': osm },
-  { 'Plants per parcel': speciesLayer, 'Plants per roadside section': roadsideLayer, 'iNat plant records': obsLayer,
-    'Properties': propertyLayer, 'Parcels': parcelLayer, 'Native vegetation 2005 (EVC)': vegLayer,
-    [CATCH ? esc(CATCH.name) + ' & Landcare group boundaries' : hasGroups ? 'Landcare group boundaries' : 'Study area']: areaLayer },
-  { collapsed: true }
-).addTo(map);
+L.control.layers({ 'Satellite imagery': imagery, 'Topographic (Esri)': topo}, null, { collapsed: true }).addTo(map);
 L.control.scale({ imperial: false }).addTo(map);
 
 function vegPiecesOf(p) {
@@ -376,7 +236,7 @@ function buildSpeciesLayer() {
   if (shadeMode === 'parcel') {
     for (const p of parcels) items.push({ s: p.shape, u: p });
   } else {
-    for (const v of vegItems) items.push({ s: v.s, u: NONE });                       // base: all native veg as 'no records'
+    for (const s of vegShapes) items.push({ s, u: NONE });                           // base: all native veg as 'no records'
     for (const p of parcels) if (p.stats.obsCount) for (const s of vegPiecesOf(p)) items.push({ s, u: p });
   }
   speciesItems = items;
@@ -384,26 +244,24 @@ function buildSpeciesLayer() {
   updateLegend();
 }
 const modeLabel = () => ({ lf: 'understorey plant groups', und: 'native understorey species', all: 'plant species', intro: 'introduced species' }[countMode]);
-const inSel = u => selGroup === -1 || (selGroup === NO_GROUP ? u.grp < 0 : u.grp === selGroup);
-const selName = () => selGroup >= 0 ? groups[selGroup].short : selGroup === NO_GROUP ? 'Not in a Landcare group' : '';
 function updateLegend() {
   const label = modeLabel();
-  const ps = parcels.filter(inSel), rs = roadsides.filter(inSel);
-  const pc = ps.map(count), rc = rs.map(count);
-  let max = 0; for (const n of pc) if (n > max) max = n; for (const n of rc) if (n > max) max = n;
   document.getElementById('spLegend').innerHTML =
-    bins().filter(b => b[0] <= Math.max(max, 1)).map((b, i) =>
+    '<div class="key"><span class="fill" style="background:' + NO_RECORDS + '"></span><span class="gap">No records yet – a gap to explore</span></div>' +
+    bins().map((b, i) =>
       '<div class="key"><span class="fill" style="background:' + COLS[i] + '"></span>' +
-      (b[1] === Infinity ? b[0] + '+' : b[0] === b[1] ? b[0] : b[0] + '–' + b[1]) + ' ' + label + '</div>').join('') +
-    '<div class="key"><span class="fill" style="background:' + NO_RECORDS + '"></span>No records (not surveyed ≠ no plants)</div>' +
-    (countMode === 'lf' ? '<div style="margin-top:4px">Plant groups follow Habitat Hectares lifeforms (shrubs, herbs, grasses, ferns, climbers…). Canopy trees, mistletoe, introduced and planted species are left out.</div>' : '') +
-    '<div style="margin-top:4px">' + (selName() ? '<b>' + esc(selName()) + ':</b> ' : '') +
-    pc.filter(n => n).length.toLocaleString() + ' of ' + ps.length.toLocaleString() + ' parcels and ' + rc.filter(n => n).length.toLocaleString() + ' of ' + rs.length.toLocaleString() +
-    ' roadside sections have records · max ' + max + ' in one place</div>';
+      (b[1] === Infinity ? b[0] + '+' : b[0] === b[1] ? b[0] : b[0] + '–' + b[1]) + ' ' + label + '</div>').join('');
 }
 
 // ---------- Popups ----------
+function tags(t) {
+  return (t[3] === 'I' ? '<span class="tag intro">INTRODUCED</span>' : '') +
+         (t[3] === 'P' ? '<span class="tag plant">PLANTED / NOT LOCAL</span>' : '') +
+         (t[3] === 'N' && !t[4] ? '<span class="tag other">' + (t[2] === 'TREE' ? 'TREE' : t[2] === 'MIS' ? 'MISTLETOE' : 'NOT UNDERSTOREY') + '</span>' : '') +
+         (t[5] === 'unclassified' ? '<span class="tag other">UNCLASSIFIED</span>' : '');
+}
 function statsHtml(s) {
+  if (!s.obsCount) return '</table><div class="gap" style="margin-top:4px">No iNaturalist plant records yet – worth a look!</div>';
   let h = '<tr><td>iNat plant records</td><td>' + s.obsCount + '</td></tr>' +
     '<tr><td>Understorey plant groups</td><td><b>' + s.lfs.size + '</b></td></tr>' +
     '<tr><td>Native understorey species</td><td><b>' + s.und.size + '</b></td></tr>' +
@@ -419,19 +277,24 @@ function statsHtml(s) {
   }
   return h;
 }
-const groupRow = u => !hasGroups ? '' : '<tr><td>Landcare group</td><td>' + (u.grp >= 0 ? esc(groups[u.grp].short) : '<i>none</i>') + '</td></tr>';
 const vegHaCache = {};
 function vegHa(p) {
   if (D.parcelVeg[p.i]) return D.parcelVeg[p.i][0];
   if (p.i in vegHaCache) return vegHaCache[p.i];
   let ha = 0; const pf = toGeoJSON(p.shape);
-  for (const v of vegItems) {
-    if (!bboxOverlap(p.shape.bb, v.s.bb)) continue;
-    try { const x = turf.intersect(pf, toGeoJSON(v.s)); if (x) ha += turf.area(x) / 10000; } catch (e) {}
+  for (const v of vegShapes) {
+    if (!bboxOverlap(p.shape.bb, v.bb)) continue;
+    try { const x = turf.intersect(pf, toGeoJSON(v)); if (x) ha += turf.area(x) / 10000; } catch (e) {}
   }
   return (vegHaCache[p.i] = ha);
 }
-function unitPopupHtml(lng, lat) {
+// keep popups clear of the side panel on wide screens
+function panelPad() {
+  const el = document.querySelector('.panel');
+  return window.innerWidth > 600 && el && document.getElementById('panelBody').style.display !== 'none' ? el.offsetLeft + el.offsetWidth + 10 : 0;
+}
+map.on('click', e => {
+  const lng = e.latlng.lng, lat = e.latlng.lat;
   const hit = arr => arr.find(u => pointIn(u.shape, lng, lat));
   const parcel = hit(parcels);
   const road = parcel ? null : hit(roadsides);
@@ -440,131 +303,34 @@ function unitPopupHtml(lng, lat) {
   if (road) {
     html += '<h3>Roadside: ' + esc(road.road) + '</h3><table>' +
       (road.lengthM ? '<tr><td>Section length</td><td>~' + Math.round(road.lengthM / 10) * 10 + ' m</td></tr>' : '') +
-      '<tr><td>Reserve area</td><td>' + road.ha.toFixed(2) + ' ha</td></tr>' + groupRow(road) + statsHtml(road.stats);
+      '<tr><td>Reserve area</td><td>' + road.ha.toFixed(2) + ' ha</td></tr>' + statsHtml(road.stats);
   }
   if (parcel) {
     const vh = vegHa(parcel);
     html += '<h3>Parcel ' + esc(parcel.spi || parcel.pfi) + (parcel.road ? ' <span class="small">(road)</span>' : '') + '</h3><table>' +
       '<tr><td>Area</td><td>' + parcel.ha.toFixed(1) + ' ha</td></tr>' +
-      '<tr><td>Native veg (2005)</td><td>' + vh.toFixed(1) + ' ha (' + Math.round(100 * vh / parcel.ha) + '%)</td></tr>' + groupRow(parcel) + statsHtml(parcel.stats);
+      '<tr><td>Native veg (2005)</td><td>' + vh.toFixed(1) + ' ha (' + Math.round(100 * vh / parcel.ha) + '%)</td></tr>' + statsHtml(parcel.stats);
   }
   if (prop) {
     html += '<div class="sec"><b>Property:</b> ' + esc(prop.addrs[0] || 'No address recorded') +
       (prop.addrs.length > 1 ? ' <span class="small">+' + (prop.addrs.length - 1) + ' more</span>' : '') +
-      '<br><span class="small">' + (turf.area(toGeoJSON(prop.shape)) / 10000).toFixed(1) + ' ha · council prop. no. ' + esc(prop.propnum || '—') + ' · PFI ' + esc(prop.pfi) + '</span></div>';
+      '<br><span class="small">' + (turf.area(toGeoJSON(prop.shape)) / 10000).toFixed(1) + ' ha · council prop. no. ' + esc(prop.propnum || '—') + '</span></div>';
   }
-  return html;
-}
-map.on('click', e => {
-  if (map.hasLayer(obsLayer)) {           // records first: nearest within 7 px
-    const scale = 256 * Math.pow(2, map.getZoom()), u = (e.latlng.lng + 180) / 360, v = mercV(e.latlng.lat);
-    let best = -1, bd = 7 * 7;
-    for (const p of obsPts) { const dx = (p.u - u) * scale, dy = (p.v - v) * scale, d = dx * dx + dy * dy; if (d < bd) { bd = d; best = p.k; } }
-    if (best >= 0) { L.popup(popupOpts()).setLatLng([D.obs[best][1], D.obs[best][0]]).setContent(obsPopup(best)).openOn(map); return; }
-  }
-  const html = unitPopupHtml(e.latlng.lng, e.latlng.lat);
-  if (html) L.popup(popupOpts({ minWidth: 300, maxWidth: 400 })).setLatLng(e.latlng).setContent(html).openOn(map);
+  if (html) L.popup({ minWidth: 300, maxWidth: 400, autoPanPaddingTopLeft: [panelPad() + 10, 10] }).setLatLng(e.latlng).setContent(html).openOn(map);
 });
-// keep zooms and popups clear of the side panel on wide screens
-function panelPad() {
-  const el = document.querySelector('.panel');
-  return window.innerWidth > 600 && el && document.getElementById('panelBody').style.display !== 'none' ? el.offsetLeft + el.offsetWidth + 10 : 0;
-}
-const popupOpts = extra => Object.assign({ autoPanPaddingTopLeft: [panelPad() + 10, 10] }, extra);
-function fitTo(b, opts) {
-  const pad = panelPad();
-  map.fitBounds([[b[1], b[0]], [b[3], b[2]]], Object.assign({ paddingTopLeft: [pad + 20, 20], paddingBottomRight: [20, 20] }, opts));
-}
-function zoomToUnit(u) {
-  const c = turf.pointOnFeature(toGeoJSON(u.shape)).geometry.coordinates;
-  map.once('moveend', () => L.popup(popupOpts({ minWidth: 300, maxWidth: 400 })).setLatLng([c[1], c[0]]).setContent(unitPopupHtml(c[0], c[1])).openOn(map));
-  fitTo(u.shape.bb, { paddingTopLeft: [panelPad() + 380, 60], paddingBottomRight: [40, 40], maxZoom: 16 });
-}
 
-// ---------- Group selector & summary ----------
-const groupSel = document.getElementById('groupSel');
-function groupSummary() {
-  const box = document.getElementById('groupSummary');
-  if (!hasGroups) return;
-  const g = selGroup;
-  const ps = parcels.filter(inSel), rs = roadsides.filter(inSel);
-  const areaHa = g >= 0 ? g_stat(g, 0) : g === NO_GROUP ? CATCH?.outside?.[0] : (D.meta.areaHa ?? D.meta.areaKm2 * 100);
-  const vegH = g >= 0 ? g_stat(g, 1) : g === NO_GROUP ? CATCH?.outside?.[1] : D.meta.areaNativeVegHa;
-  const und = new Set(), lfs = new Set(); let nrec = 0;
-  D.obs.forEach((o, k) => {
-    if (g >= 0 && OG[k] !== g) return;
-    if (g === NO_GROUP && !(OG[k] < 0)) return;
-    if (g === -1 && !CATCH && OG.length && OG[k] < 0 && !o[7]) return;
-    nrec++;
-    const t = T[o[2]]; if (!t) return;
-    if (t[4] && t[2] && !EXCL.has(t[2])) lfs.add(t[2]);
-    if (t[4] && t[6]) und.add(o[2]);
-  });
-  const top = (arr, label) => {
-    const list = arr.map(u => [u, count(u)]).filter(x => x[1] > 0)
-      .sort((a, b) => b[1] - a[1] || b[0].stats.obsCount - a[0].stats.obsCount).slice(0, 5);
-    if (!list.length) return '<div class="small">No records yet</div>';
-    return '<ol>' + list.map(([u, n]) => '<li><a data-k="' + u.kind + '" data-i="' + u.i + '">' +
-      esc(u.kind === 1 ? 'Parcel ' + (u.spi || u.pfi) : u.road) + '</a>' +
-      (u.kind === 1 ? ' <span class="small">' + u.ha.toFixed(0) + ' ha</span>' : '') + '<span class="n">' + n + '</span></li>').join('') + '</ol>';
-  };
-  box.innerHTML = '<table>' +
-    '<tr><td>Area</td><td>' + (areaHa != null ? fmt(areaHa) + ' ha' : '–') + '</td></tr>' +
-    '<tr><td>Native vegetation (2005)</td><td>' + (vegH != null ? fmt(vegH) + ' ha' + (areaHa ? ' (' + Math.round(100 * vegH / areaHa) + '%)' : '') : '–') + '</td></tr>' +
-    '<tr><td>Parcels with records</td><td>' + ps.filter(p => p.stats.obsCount).length.toLocaleString() + ' / ' + ps.length.toLocaleString() + '</td></tr>' +
-    '<tr><td>Roadside sections with records</td><td>' + rs.filter(r => r.stats.obsCount).length.toLocaleString() + ' / ' + rs.length.toLocaleString() + '</td></tr>' +
-    '<tr><td>iNat plant records</td><td>' + nrec.toLocaleString() + '</td></tr>' +
-    '<tr><td>Native understorey species</td><td><b>' + und.size + '</b></td></tr>' +
-    '<tr><td>Understorey plant groups</td><td><b>' + lfs.size + '</b> of ' + (Object.keys(LF).length - EXCL.size) + '</td></tr></table>' +
-    (lfs.size ? '<div class="chips">' + Object.keys(LF).filter(c => lfs.has(c)).map(c => '<span>' + esc(LF[c]) + '</span>').join('') + '</div>' : '') +
-    '<h3>Top parcels · ' + modeLabel() + '</h3>' + top(ps, 'parcels') +
-    '<h3>Top roadside sections · ' + modeLabel() + '</h3>' + top(rs, 'roadsides');
-  box.querySelectorAll('a[data-k]').forEach(a => a.addEventListener('click', () => {
-    const u = a.dataset.k === '1' ? parcels[+a.dataset.i] : roadsides[+a.dataset.i]; zoomToUnit(u);
-  }));
-}
-function g_stat(g, k) { return groups[g].stats ? groups[g].stats[k] : null; }
-if (hasGroups) {
-  document.getElementById('groupBox').style.display = '';
-  if (CATCH) groupSel.options[0].text = 'All of ' + CATCH.name;
-  [...groups].sort((a, b) => a.short.localeCompare(b.short)).forEach(g => groupSel.add(new Option(g.short, g.i)));
-  if (CATCH) groupSel.add(new Option('Not in a Landcare group', NO_GROUP));
-  groupSel.addEventListener('change', () => {
-    selGroup = groupSel.value === 'all' ? -1 : +groupSel.value;
-    groupOutline.setStyle(f => f.properties.i === selGroup ? G_SEL : G_STY);
-    groupLabels.forEach((m, i) => { const el = m.getElement(); if (el) el.classList.toggle('sel', i === selGroup); });
-    fitTo(selGroup >= 0 ? groups[selGroup].shape.bb : allBounds);
-    updateLegend(); groupSummary();
-  });
-}
-
-// ---------- Panel text ----------
-const m = D.meta, built = new Date(m.built);
-const builtTxt = built.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
-document.getElementById('intro').innerHTML = (CATCH
-  ? esc(CATCH.name) + ' · ' + fmt(m.areaKm2) + ' km² · ' + groups.length + ' Landcare groups'
-  : hasGroups
-  ? groups.length + ' Landcare group' + (groups.length > 1 ? 's' : '') + ' · ' + fmt(m.areaKm2) + ' km²'
-  : m.sizeKm + ' × ' + m.sizeKm + ' km area') +
-  ' · data built ' + builtTxt + '. Click anywhere for parcel, roadside and property details.';
-document.getElementById('vegLegend').innerHTML = D.evcs.map((e, i) => [e, i]).sort((a, b) => evcN[b[1]] - evcN[a[1]]).map(([e, i]) =>
-  '<div class="key"><span class="fill" style="background:' + evcColour[i] + '"></span><span>' + esc(e[0]) +
-  ' <span class="small">EVC ' + e[1] + (e[2].length ? ' · ' + esc(e[2].join(' / ')) : '') + '</span></span></div>').join('') +
-  '<div style="margin-top:4px">Turn on in the layer menu (top right). Mapped at 1:100,000 – check on the ground.</div>';
-const placedP = D.obs.filter(o => o[7] === 1).length, placedR = D.obs.filter(o => o[7] === 2).length;
+// ---------- Fit & panel text ----------
+const bb = D.catchment ? decodeShape(D.catchment[1]).bb : D.meta.bbox;
+map.fitBounds([[bb[1], bb[0]], [bb[3], bb[2]]], { paddingTopLeft: [panelPad() + 20, 20], paddingBottomRight: [20, 20] });
+const built = new Date(D.meta.built).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+document.getElementById('intro').innerHTML =
+  'Sandy areas have <b>no iNaturalist plant records yet</b>. Pick one, go for a walk (with permission on private land), and record what you find. Click anywhere for details.';
 document.getElementById('notes').innerHTML =
-  placedP.toLocaleString() + ' records fall in parcels and ' + placedR.toLocaleString() + ' on roadside sections' + (m.counts.unplaced ? ' (' + m.counts.unplaced.toLocaleString() + ' elsewhere)' : '') + '. ' +
-  'Left out: records with hidden locations (including many threatened orchids) and ' + m.counts.coarse.toLocaleString() + ' with GPS accuracy worse than 200 m. ' +
-  'Native / introduced / plant group come from the understorey lookup (' + esc(m.lookup) + '). Re-run the builder to pick up new iNat records.';
-fitTo(allBounds);
+  '“Native veg” colours only mapped native vegetation (2005) and roadside reserves; “whole parcel” colours every parcel. Records with hidden locations aren’t shown. Data built ' + built + '.';
 buildSpeciesLayer();
-groupSummary();
-status.textContent = parcels.length.toLocaleString() + ' parcels · ' + roadsides.length.toLocaleString() + ' roadside sections · ' + D.obs.length.toLocaleString() + ' iNat plant records';
-status.style.color = '#1a7f37';
-console.log('Biolinks map ready in ' + Math.round(performance.now() - t0) + ' ms');
 
 document.getElementById('toggle').addEventListener('click', e => { const b = document.getElementById('panelBody'); const hide = b.style.display !== 'none'; b.style.display = hide ? 'none' : ''; e.target.textContent = hide ? 'Show' : 'Hide'; });
-document.getElementById('countMode').addEventListener('change', e => { countMode = e.target.value; speciesLayer.redraw(); roadsideLayer.redraw(); updateLegend(); groupSummary(); });
+document.getElementById('countMode').addEventListener('change', e => { countMode = e.target.value; speciesLayer.redraw(); roadsideLayer.redraw(); updateLegend(); });
 document.querySelectorAll('input[name=shade]').forEach(r => r.addEventListener('change', e => { shadeMode = e.target.value; buildSpeciesLayer(); }));
 </script>
 </body>
