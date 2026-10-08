@@ -44,6 +44,8 @@
   .newfinds { margin: 8px 0 2px; padding: 6px 9px; background: #fff6d6; border: 1px solid #f0d27a; border-radius: 6px; color: #5c3d00; }
   .newfinds .star, .star { color: #e0a100; font-size: 15px; }
   .newfind { margin-top: 5px; font-weight: 600; color: #7a5200; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; border: 1.5px solid #222; flex: none; }
+  #dotKey { margin: 2px 0 0 22px; }
   .goal { margin: 4px 0 6px; color: #1f2420; }
   .steps { margin: 0; padding-left: 18px; color: #333; }
   .steps li { margin: 3px 0; }
@@ -78,6 +80,15 @@
   </div>
   <div class="ctl">
     <label><input type="checkbox" id="showStars" checked> <b>Show <span class="star">★</span> on new finds</b></label>
+  </div>
+  <div class="ctl">
+    <label><input type="checkbox" id="showDots"> <b>Show iNaturalist records (dots)</b></label>
+    <div id="dotKey" class="small" style="display:none">
+      <div class="key"><span class="dot" style="background:#ffffff"></span> native understorey</div>
+      <div class="key"><span class="dot" style="background:#9e9e9e"></span> native tree, mistletoe or planted</div>
+      <div class="key"><span class="dot" style="background:#ff6b6b"></span> introduced</div>
+      <div>Click a dot to see the record.</div>
+    </div>
   </div>
   <div id="spLegend" class="small"></div>
   <div class="small" id="notes" style="margin-top:8px"></div>
@@ -185,7 +196,8 @@ const topo = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/W
 map.createPane('species'); map.getPane('species').style.zIndex = 390;
 map.createPane('roads');   map.getPane('roads').style.zIndex = 395;
 map.createPane('stars');   map.getPane('stars').style.zIndex = 420;
-for (const p of ['species', 'roads', 'stars']) map.getPane(p).style.pointerEvents = 'none';
+map.createPane('obs');     map.getPane('obs').style.zIndex = 430;
+for (const p of ['species', 'roads', 'stars', 'obs']) map.getPane(p).style.pointerEvents = 'none';
 
 // Canvas tile layers: each 256 px tile draws only the shapes that touch it, so tens of thousands
 // of polygons stay responsive (Leaflet only draws the tiles in view, and caches them while panning).
@@ -329,9 +341,44 @@ const starLayer = new PolyTiles({ pane: 'stars', draw: (ctx, tb, scale, ox, oy) 
     drawStar(ctx, s.u * scale - ox, s.v * scale - oy, 8);
   }
 } }).addTo(map);
+// ---------- iNaturalist record dots ----------
+const UNKNOWN = ['Unknown', '', '', 'N', 0, 'unclassified', 0];
+const obsPts = D.obs.map((o, k) => {
+  const t = T[o[2]] || UNKNOWN;
+  const pub = o[7] === 1 ? parcels[o[8]].pub : 1;          // roadsides and unplaced records count as public
+  return { k, u: (o[0] + 180) / 360, v: mercV(o[1]), pub, fill: t[3] === 'I' ? '#ff6b6b' : t[4] ? '#ffffff' : '#9e9e9e' };
+});
+const obsLayer = new PolyTiles({ pane: 'obs', draw: (ctx, tb, scale, ox, oy) => {
+  ctx.lineWidth = 1.2; ctx.strokeStyle = '#222'; ctx.globalAlpha = 1;
+  for (const p of obsPts) {
+    if (publicOnly && !p.pub) continue;
+    if (p.u < tb[0] || p.u > tb[2] || p.v < tb[1] || p.v > tb[3]) continue;
+    ctx.beginPath(); ctx.arc(p.u * scale - ox, p.v * scale - oy, 4, 0, 2 * Math.PI);
+    ctx.fillStyle = p.fill; ctx.fill(); ctx.stroke();
+  }
+} });
+function obsAt(latlng) {
+  if (!map.hasLayer(obsLayer)) return -1;
+  const scale = 256 * Math.pow(2, map.getZoom()), u = (latlng.lng + 180) / 360, v = mercV(latlng.lat);
+  let best = -1, bd = 7 * 7;
+  for (const p of obsPts) {
+    if (publicOnly && !p.pub) continue;
+    const dx = (p.u - u) * scale, dy = (p.v - v) * scale, d = dx * dx + dy * dy;
+    if (d < bd) { bd = d; best = p.k; }
+  }
+  return best;
+}
+function obsPopup(k) {
+  const [, , id, , date, rg, obsId] = D.obs[k];
+  const t = T[id] || UNKNOWN;
+  return '<i>' + esc(t[0]) + '</i>' + (t[1] ? ' – ' + esc(t[1]) : '') + tags(t) +
+    (t[2] ? '<div class="lf">' + esc(LF[t[2]]) + '</div>' : '<br>') +
+    '<span class="small">' + (date ? fmtDate(date) : 'date unknown') + ' · ' + (rg ? 'Research grade' : 'Needs ID') + '</span><br>' +
+    '<a href="https://www.inaturalist.org/observations/' + obsId + '" target="_blank" rel="noopener">Open on iNaturalist</a>';
+}
 const newFindHtml = u => u.firstNew && !u.undBefore ? '<div class="newfind"><span class="star">★</span> New find – first native understorey record on ' + fmtDate(u.firstNew) + '</div>' : '';
 
-L.control.layers({ 'Satellite imagery': imagery, 'Topographic (Esri)': topo}, null, { collapsed: true }).addTo(map);
+const layerCtl = L.control.layers({ 'Satellite imagery': imagery, 'Topographic (Esri)': topo}, null, { collapsed: true }).addTo(map);
 L.control.scale({ imperial: false }).addTo(map);
 
 function vegPiecesOf(p) {
@@ -428,6 +475,8 @@ function starAt(latlng) {
 }
 map.on('click', e => {
   const lng = e.latlng.lng, lat = e.latlng.lat;
+  const ok = obsAt(e.latlng);                              // a record dot under the click wins
+  if (ok >= 0) { L.popup({ autoPanPaddingTopLeft: [panelPad() + 10, 10] }).setLatLng([D.obs[ok][1], D.obs[ok][0]]).setContent(obsPopup(ok)).openOn(map); return; }
   const hit = arr => arr.find(u => pointIn(u.shape, lng, lat));
   const star = starAt(e.latlng), su = star && star.unit;
   const parcel = su ? (su.spi !== undefined ? su : null) : hit(shownParcels);
@@ -474,7 +523,19 @@ document.getElementById('newFinds').innerHTML = newFinds.length
 document.getElementById('toggle').addEventListener('click', e => { const b = document.getElementById('panelBody'); const hide = b.style.display !== 'none'; b.style.display = hide ? 'none' : ''; e.target.textContent = hide ? 'Show' : 'Hide'; });
 if (PUB) document.getElementById('publicCtl').style.display = '';
 document.getElementById('showStars').addEventListener('change', e => { if (e.target.checked) starLayer.addTo(map); else map.removeLayer(starLayer); });
-document.getElementById('publicOnly').addEventListener('change', e => { publicOnly = e.target.checked; buildSpeciesLayer(); starLayer.redraw(); });
+document.getElementById('publicOnly').addEventListener('change', e => { publicOnly = e.target.checked; buildSpeciesLayer(); starLayer.redraw(); obsLayer.redraw(); });
+// record dots can be switched on from the panel or the layers button (top right); keep the two in step
+layerCtl.addOverlay(obsLayer, 'iNaturalist records (dots)');
+function syncDots() {
+  const on = map.hasLayer(obsLayer);
+  document.getElementById('showDots').checked = on;
+  document.getElementById('dotKey').style.display = on ? '' : 'none';
+}
+map.on('overlayadd overlayremove', syncDots);
+document.getElementById('showDots').addEventListener('change', e => {
+  if (e.target.checked) obsLayer.addTo(map); else map.removeLayer(obsLayer);
+  syncDots();
+});
 document.getElementById('countMode').addEventListener('change', e => { countMode = e.target.value; speciesLayer.redraw(); roadsideLayer.redraw(); updateLegend(); });
 document.querySelectorAll('input[name=shade]').forEach(r => r.addEventListener('change', e => { shadeMode = e.target.value; buildSpeciesLayer(); }));
 </script>
