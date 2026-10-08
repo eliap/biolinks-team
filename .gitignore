@@ -7,3 +7,4 @@ build_full.log
 HANDOFF.md
 *.pdf
 mockups/
+build_*.log

@@ -62,6 +62,12 @@ WFS_LAYERS = {
 # water production, earth resources, plantations, Commonwealth and uncategorised land are left out.
 WALKABLE_MMTGEN = {'NATIONAL PARKS ACT AND NATURE CONSERVATION RESERVES', 'OTHER CONSERVATION RESERVES', 'STATE FOREST'}
 WALKABLE_OTHER_REC_CAT = {'NATURAL FEATURES RESERVE', 'COMMUNITY USE AREA'}
+# Map regions: outline shapefile + the polygon's name. Upper Wimmera also adds its Landcare group polygons.
+REGIONS = {
+    'upper-wimmera': {'name': 'Upper Wimmera', 'shp': HERE / 'landcare' / 'network data' / 'wca_LandcareNetworks_2007_mga54.shp', 'poly': 'Upper Catchment'},
+    'upper-hopkins': {'name': 'Upper Hopkins', 'shp': HERE / 'landcare' / 'network data' / 'GHCMA_Landcare_Networks_2020.shp', 'poly': 'Upper Hopkins Landcare Consortium'},
+    'upper-mount-emu': {'name': 'Upper Mount Emu Creek', 'shp': HERE / 'landcare' / 'network data' / 'GHCMA_Landcare_Networks_2020.shp', 'poly': 'Upper Mount Emu Creek Landcare Network'},
+}
 ROAD_PARCEL_COVERED = 0.5     # road parcels at least this much covered by roadside sections merge into them
 PUBLIC_SHARE = 0.5            # a parcel counts as public if at least this share of it is walkable public land
 
@@ -82,7 +88,8 @@ def public_kind(p):
     return 'water frontage or natural features reserve' if (p.get('rec_cat') or '').upper().startswith('NATURAL') else 'community reserve'
 INAT = 'https://api.inaturalist.org/v1/observations'
 USER_AGENT = 'biolinks-data-builder/1.0 (Project Platypus / Upper Wimmera Landcare habitat map; python-requests)'
-MAX_ACCURACY_M = 200
+MAX_ACCURACY_M = 200          # records less precise than this are not used for colouring or placing in parcels
+VAGUE_MAX_M = 1000            # ...but up to this they are kept as 'approximate' records (faded dots; block false new-find stars)
 ROADSIDE_SECTION_M = 500
 ROAD_BUFFER_M = 40
 MIN_SECTION_M2 = 200          # pieces smaller than this are dropped
@@ -264,6 +271,16 @@ def read_gz(path):
         return json.load(f)
 
 
+def clear_dir(d):
+    """Empty a cache folder before re-downloading. Only the files are removed: OneDrive can refuse to
+    delete the folder itself ('Access is denied'), which used to stop the run."""
+    for f in d.iterdir():
+        if f.is_file():
+            f.unlink()
+        else:
+            shutil.rmtree(f, ignore_errors=True)
+
+
 def find_cache(kind_dir, prefix, bbox):
     """A complete cached download whose bbox covers the one we need (e.g. a group inside the full area)."""
     if not kind_dir.exists():
@@ -291,7 +308,7 @@ def download_wfs(cache, layer, bbox, refresh):
             return load_pages(hit[1])
     d = wdir / f'{layer}_{bbox_key(bbox)}'
     if refresh and d.exists():
-        shutil.rmtree(d)
+        clear_dir(d)
     d.mkdir(parents=True, exist_ok=True)
     params = {'service': 'WFS', 'version': '2.0.0', 'request': 'GetFeature', 'typeNames': 'open-data-platform:' + layer,
               'outputFormat': 'application/json', 'srsName': 'EPSG:4326', 'bbox': ','.join(map(str, bbox)) + ',EPSG:4326',
@@ -334,7 +351,7 @@ def trim_obs(o):
     t = o.get('taxon')
     g = o.get('geojson')
     return {'id': o['id'], 'c': g.get('coordinates') if g else None, 'acc': o.get('positional_accuracy'),
-            'd': o.get('observed_on') or '', 'q': o.get('quality_grade'),
+            'd': o.get('observed_on') or '', 'q': o.get('quality_grade'), 'u': (o.get('user') or {}).get('login') or '',
             't': {k: t.get(k) for k in ('id', 'name', 'rank_level', 'min_species_taxon_id', 'preferred_common_name', 'introduced')} if t else None}
 
 
@@ -400,7 +417,7 @@ def download_inat(cache, bbox, refresh, update=False):
             log('iNaturalist: nothing cached to update yet – doing a full download')
     d = idir / f'inat_{bbox_key(bbox)}'
     if refresh and d.exists():
-        shutil.rmtree(d)
+        clear_dir(d)
     d.mkdir(parents=True, exist_ok=True)
     n, id_above = cached_max_id(d)
     if n:   # resume an interrupted download
@@ -490,6 +507,16 @@ def load_groups(path):
         g = polyonly(unary_union(reproject(np.array(geoms[name], dtype=object), MGA_TO_M)))
         out.append({'name': name, 'abbr': abbr[name], 'geom': g})
     return out
+
+
+def load_outline(path, name):
+    """Union of the polygons in an MGA54 shapefile that have any text field equal to name."""
+    sf = shapefile.Reader(str(path))
+    parts = [shapely.make_valid(shape(sr.shape.__geo_interface__)) for sr in sf.iterShapeRecords()
+             if any(isinstance(v, str) and v.strip().lower() == name.lower() for v in sr.record)]
+    if not parts:
+        sys.exit(f'{Path(path).name}: no polygon named "{name}"')
+    return polyonly(unary_union(reproject(np.array(parts, dtype=object), MGA_TO_M)))
 
 
 def load_catchment(path, region):
@@ -633,11 +660,17 @@ def main():
     ap.add_argument('--catchment-region', default='Upper Catchment', help='LCRegion/Network value of the outline in --catchment')
     ap.add_argument('--lookup', default=str(HERE / 'understorey_lookup.csv'))
     ap.add_argument('--cache', default=str(HERE / 'cache'))
-    ap.add_argument('--out', default=str(HERE / 'inaturalist-map' / 'biolinks_data.js'))
-    ap.add_argument('--unclassified', default=str(HERE / 'unclassified_plants.csv'))
+    ap.add_argument('--include-usernames', action='store_true', help='add iNaturalist usernames to the output (for a leaderboard); off by default')
+    ap.add_argument('--region', default='upper-wimmera', choices=list(REGIONS), help='map region (default upper-wimmera)')
+    ap.add_argument('--out', help='output file (default inaturalist-map/biolinks_data.js for upper-wimmera, inaturalist-map/biolinks_data_<region>.js otherwise)')
+    ap.add_argument('--unclassified', help='unclassified plants CSV (default unclassified_plants.csv, or unclassified_plants_<region>.csv)')
     ap.add_argument('--check-parcel', action='append', default=[], help=r'print plant counts for a parcel SPI, e.g. S6\PP3207')
     args = ap.parse_args()
     cache = Path(args.cache)
+    region = REGIONS[args.region]
+    uw = args.region == 'upper-wimmera'
+    args.out = args.out or str(HERE / 'inaturalist-map' / ('biolinks_data.js' if uw else f'biolinks_data_{args.region}.js'))
+    args.unclassified = args.unclassified or str(HERE / ('unclassified_plants.csv' if uw else f'unclassified_plants_{args.region}.csv'))
 
     # ---- 0. area & lookup ----
     with Stage('Area and lookup'):
@@ -655,6 +688,15 @@ def main():
             groups = [g for g in groups_all if g['geom'].intersects(area)]
             mode = 'square'
             log(f'Area: {size:g} × {size:g} km square around {lat}, {lng} (overlaps {len(groups)} groups)')
+        elif not uw:
+            # another Landcare network region: its outline from the network shapefile; no group polygons of its own
+            catchment = area = load_outline(region['shp'], region['poly'])
+            groups = [g for g in groups_all if g['geom'].intersects(area)]
+            mode = 'catchment'
+            ll = reproject(area, M_TO_LL).bounds
+            pad = 0.002
+            bbox = [round(ll[0] - pad, 4), round(ll[1] - pad, 4), round(ll[2] + pad, 4), round(ll[3] + pad, 4)]
+            log(f'Area: {region["name"]} ({region["poly"]}) · {area.area / 1e6:,.0f} km² · overlaps {len(groups)} Upper Wimmera groups')
         else:
             groups = groups_all
             if args.group:
@@ -741,7 +783,8 @@ def main():
                 continue
             if o['acc'] and o['acc'] > MAX_ACCURACY_M:
                 coarse += 1
-                continue
+                if o['acc'] > VAGUE_MAX_M:
+                    continue
             cand.append(o)
         xy = np.array([o['c'][:2] for o in cand], float).reshape(-1, 2)
         pts_m = shapely.points(np.column_stack(LL_TO_M.transform(xy[:, 0], xy[:, 1]))) if len(cand) else np.array([], object)
@@ -784,9 +827,11 @@ def main():
         inside = shapely.intersects(area, pts_m) if n else np.array([], bool)
         keep = (kind > 0) | inside
         outside = int((~keep).sum())
-        obs_out, obs_pts = [], []
+        obs_out, obs_pts, vague_out = [], [], []
+        users, user_idx = [], {}
         for i in np.nonzero(keep)[0]:
             o = cand[i]
+            is_vague = bool(o['acc'] and o['acc'] > MAX_ACCURACY_M)
             t = o['t']
             rl = t.get('rank_level') or 0
             tid = t['min_species_taxon_id'] if rl < 10 and t.get('min_species_taxon_id') else t['id']
@@ -795,13 +840,25 @@ def main():
                 lf, origin, und, src = classify(lookup, tid, name, bool(t.get('introduced')))
                 taxa[tid] = [name, t.get('preferred_common_name') or '', lf, origin, 1 if und else 0, src, 1 if rl <= 10 else 0]
             x, y = o['c'][:2]
-            obs_out.append([round(x, 5), round(y, 5), tid, rl, o['d'], 1 if o['q'] == 'research' else 0, o['id'], int(kind[i]), int(unit[i])])
+            row = [round(x, 5), round(y, 5), tid, rl, o['d'], 1 if o['q'] == 'research' else 0, o['id'], int(kind[i]), int(unit[i])]
+            if is_vague:
+                row.append(int(round(o['acc'])))          # vague: [.., kind/unit of the pin's parcel or roadside, accuracy m]
+            if args.include_usernames:                    # last field: index into 'users' (iNaturalist login)
+                uname = o.get('u') or ''
+                if uname not in user_idx:
+                    user_idx[uname] = len(users)
+                    users.append(uname)
+                row.append(user_idx[uname])
+            if is_vague:
+                vague_out.append(row)
+                continue
+            obs_out.append(row)
             obs_pts.append(pts_m[i])
         placed_p = sum(1 for o in obs_out if o[7] == 1)
         placed_r = sum(1 for o in obs_out if o[7] == 2)
         unplaced = sum(1 for o in obs_out if o[7] == 0)
         log(f'Records in parcels: {placed_p:,} · on roadsides: {placed_r:,} · elsewhere: {unplaced:,} · '
-            f'left out (GPS > {MAX_ACCURACY_M} m): {coarse:,} · outside the area: {outside:,}')
+            f'left out (GPS > {MAX_ACCURACY_M} m): {coarse:,} (of which {len(vague_out):,} up to {VAGUE_MAX_M} m kept as approximate) · outside the area: {outside:,}')
 
     # ---- 5. native veg clipped to parcels with records ----
     with Stage('Native veg in parcels with records'):
@@ -966,9 +1023,9 @@ def main():
                 'built': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
                 'centre': [round(cy, 6), round(cx, 6)], 'sizeKm': round(max(w_km, h_km), 1), 'bbox': bbox,
                 'counts': {'parcels': len(parcels_out), 'properties': len(props_out), 'veg': len(veg_out), 'roadsides': len(roadsides_out),
-                           'obs': len(obs_out), 'coarse': coarse, 'unplaced': unplaced, 'outsideArea': outside},
+                           'obs': len(obs_out), 'coarse': coarse, 'vague': len(vague_out), 'unplaced': unplaced, 'outsideArea': outside},
                 'lookup': lookup_text, 'roadsideSectionM': ROADSIDE_SECTION_M,
-                'mode': mode, 'areaKm2': round(area.area / 1e6, 1), 'areaHa': round(area.area / 1e4, 1), 'areaNativeVegHa': area_veg_ha, 'builder': 'build_biolinks_data.py',
+                'region': args.region if mode != 'square' else None, 'mode': mode, 'areaKm2': round(area.area / 1e6, 1), 'areaHa': round(area.area / 1e4, 1), 'areaNativeVegHa': area_veg_ha, 'builder': 'build_biolinks_data.py',
             },
             'lifeforms': LIFEFORMS,
             'excludedLifeforms': EXCLUDED,
@@ -978,9 +1035,12 @@ def main():
             'roadsides': roadsides_out, 'obs': obs_out,
             # additions for the group view (existing fields unchanged)
             'groups': groups_out, 'groupStats': group_stats,
-            'catchment': ['Upper Wimmera', encode_m([catchment], GROUP_SIMPLIFY_M)[0], outside_stats] if catchment is not None else None,
+            'catchment': [region['name'], encode_m([catchment], GROUP_SIMPLIFY_M)[0], outside_stats] if catchment is not None else None,
             'parcelGroup': parcel_group.tolist(), 'roadsideGroup': roadside_group.tolist(), 'obsGroup': obs_group.tolist(),
             # walkable public land (PLM25 parks, reserves, state forest, frontages, community reserves; road parcels)
+            # approximate records (GPS 200 m – 1 km): [lon, lat, taxon, rank, date, research, id, kind, unit of the pin, accuracy m]
+            'vague': vague_out,
+            **({'users': users} if args.include_usernames else {}),   # iNaturalist logins, indexed by the last field of each record
             'parcelRoadMerged': sorted(int(i) for i in road_covered),    # road parcels shown as part of the roadside sections
             'parcelPublic': parcel_public, 'parcelPublicName': parcel_public_name, 'vegPublic': veg_public,
         }

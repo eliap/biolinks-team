@@ -8,7 +8,18 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
 <!-- Pre-processed data made by build_biolinks_data.py (or biolinks_data_builder.html for small test areas); must sit in the same folder as this map -->
-<script src="biolinks_data.js"></script>
+<script>
+  // Region picker: ?region=upper-hopkins loads biolinks_data_upper-hopkins.js (one region at a time keeps it quick on phones;
+  // document.write keeps it working when the page is opened straight from disk)
+  window.REGIONS = {
+    'upper-wimmera': ['Upper Wimmera', 'biolinks_data.js'],
+    'upper-hopkins': ['Upper Hopkins', 'biolinks_data_upper-hopkins.js'],
+    'upper-mount-emu': ['Upper Mount Emu Creek', 'biolinks_data_upper-mount-emu.js']
+  };
+  window.REGION = new URLSearchParams(location.search).get('region') || 'upper-wimmera';
+  if (!REGIONS[REGION]) REGION = 'upper-wimmera';
+  document.write('<script src="' + REGIONS[REGION][1] + '"><\/script>');
+</script>
 <style>
   html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f4f4f0; }
   #map { position: absolute; inset: 0; background: #ffffff; }
@@ -57,6 +68,7 @@
 <div class="panel">
   <button id="toggle" style="float:right;font:inherit;font-size:12px;cursor:pointer">Hide</button>
   <h1>Where has nobody looked yet?</h1>
+  <div class="ctl" id="regionCtl"><label for="regionSel"><b>Region</b></label> <select id="regionSel"></select></div>
   <div id="panelBody">
   <div class="muted" id="intro">Loading…</div>
   <div class="newfinds" id="newFinds"></div>
@@ -87,6 +99,7 @@
       <div class="key"><span class="dot" style="background:#ffffff"></span> native understorey</div>
       <div class="key"><span class="dot" style="background:#9e9e9e"></span> native tree, mistletoe or planted</div>
       <div class="key"><span class="dot" style="background:#ff6b6b"></span> introduced</div>
+      <div class="key"><span class="dot" style="background:rgba(255,255,255,0.35);border-style:dashed;border-color:#555"></span> faded = rough location only (GPS ±200 m – 1 km)</div>
       <div>Click a dot to see the record.</div>
     </div>
   </div>
@@ -157,7 +170,7 @@ const EXCL = new Set(D.excludedLifeforms);
 const T = D.taxa;
 
 // ---------- Units: parcels & roadside sections ----------
-const newStats = () => ({ obsCount: 0, all: new Map(), und: new Set(), intro: new Set(), lfs: new Set() });
+const newStats = () => ({ obsCount: 0, vague: 0, all: new Map(), und: new Set(), intro: new Set(), lfs: new Set() });
 const PUB = D.parcelPublic, PUBNAME = D.parcelPublicName || {}, VEGPUB = D.vegPublic;
 // road parcels (surveyed road lots) already covered by roadside sections are shown as part of the roadside
 const MERGED = new Set(D.parcelRoadMerged || []);
@@ -183,6 +196,16 @@ for (const o of D.obs) {
   const e = s.all.get(id) || { id, n: 0 }; e.n++; s.all.set(id, e);
   if (t[4]) s.und.add(id);
   if (t[3] === 'I') s.intro.add(id);
+}
+// Approximate records (GPS 200 m – 1 km) aren't used for colouring, but one placed (by its pin) in a parcel or
+// roadside counts as an earlier record there, so it can't earn a 'new find' star for something already found
+const VAGUE = D.vague || [];
+for (const v of VAGUE) {
+  const kind = v[7], idx = v[8]; if (!kind) continue;
+  const u = kind === 1 ? parcels[idx] : roadsides[idx];
+  const t = T[v[2]]; if (!t || !u) continue;
+  u.stats.vague++;
+  if (t[4] && (t[6] || (t[2] && !EXCL.has(t[2]))) && (!v[4] || v[4] < NEW_SINCE)) u.undBefore = true;
 }
 
 // ---------- Map ----------
@@ -343,37 +366,41 @@ const starLayer = new PolyTiles({ pane: 'stars', draw: (ctx, tb, scale, ox, oy) 
 } }).addTo(map);
 // ---------- iNaturalist record dots ----------
 const UNKNOWN = ['Unknown', '', '', 'N', 0, 'unclassified', 0];
-const obsPts = D.obs.map((o, k) => {
+const dotOf = (o, vague) => {
   const t = T[o[2]] || UNKNOWN;
   const pub = o[7] === 1 ? parcels[o[8]].pub : 1;          // roadsides and unplaced records count as public
-  return { k, u: (o[0] + 180) / 360, v: mercV(o[1]), pub, fill: t[3] === 'I' ? '#ff6b6b' : t[4] ? '#ffffff' : '#9e9e9e' };
-});
+  return { rec: o, vague, u: (o[0] + 180) / 360, v: mercV(o[1]), pub, fill: t[3] === 'I' ? '#ff6b6b' : t[4] ? '#ffffff' : '#9e9e9e' };
+};
+const obsPts = [...VAGUE.map(o => dotOf(o, true)), ...D.obs.map(o => dotOf(o, false))];   // approximate ones drawn underneath
 const obsLayer = new PolyTiles({ pane: 'obs', draw: (ctx, tb, scale, ox, oy) => {
-  ctx.lineWidth = 1.2; ctx.strokeStyle = '#222'; ctx.globalAlpha = 1;
+  ctx.lineWidth = 1.2;
   for (const p of obsPts) {
     if (publicOnly && !p.pub) continue;
     if (p.u < tb[0] || p.u > tb[2] || p.v < tb[1] || p.v > tb[3]) continue;
     ctx.beginPath(); ctx.arc(p.u * scale - ox, p.v * scale - oy, 4, 0, 2 * Math.PI);
-    ctx.fillStyle = p.fill; ctx.fill(); ctx.stroke();
+    ctx.fillStyle = p.fill;
+    if (p.vague) { ctx.globalAlpha = 0.35; ctx.fill(); ctx.globalAlpha = 0.8; ctx.strokeStyle = '#555'; ctx.setLineDash([2, 2]); ctx.stroke(); ctx.setLineDash([]); }
+    else { ctx.globalAlpha = 1; ctx.fill(); ctx.strokeStyle = '#222'; ctx.stroke(); }
   }
 } });
 function obsAt(latlng) {
   if (!map.hasLayer(obsLayer)) return -1;
   const scale = 256 * Math.pow(2, map.getZoom()), u = (latlng.lng + 180) / 360, v = mercV(latlng.lat);
-  let best = -1, bd = 7 * 7;
-  for (const p of obsPts) {
+  let best = null, bd = 7 * 7;
+  for (const p of obsPts) {                                 // later (precise) dots win ties, as they're drawn on top
     if (publicOnly && !p.pub) continue;
     const dx = (p.u - u) * scale, dy = (p.v - v) * scale, d = dx * dx + dy * dy;
-    if (d < bd) { bd = d; best = p.k; }
+    if (d <= bd) { bd = d; best = p; }
   }
   return best;
 }
-function obsPopup(k) {
-  const [, , id, , date, rg, obsId] = D.obs[k];
+function obsPopup(p) {
+  const [, , id, , date, rg, obsId] = p.rec;
   const t = T[id] || UNKNOWN;
   return '<i>' + esc(t[0]) + '</i>' + (t[1] ? ' – ' + esc(t[1]) : '') + tags(t) +
     (t[2] ? '<div class="lf">' + esc(LF[t[2]]) + '</div>' : '<br>') +
     '<span class="small">' + (date ? fmtDate(date) : 'date unknown') + ' · ' + (rg ? 'Research grade' : 'Needs ID') + '</span><br>' +
+    (p.vague ? '<div class="small" style="color:#7a5200">Rough location only – somewhere within about ' + p.rec[9].toLocaleString() + ' m (circle). Not counted in the colours.</div>' : '') +
     '<a href="https://www.inaturalist.org/observations/' + obsId + '" target="_blank" rel="noopener">Open on iNaturalist</a>';
 }
 const newFindHtml = u => u.firstNew && !u.undBefore ? '<div class="newfind"><span class="star">★</span> New find – first native understorey record on ' + fmtDate(u.firstNew) + '</div>' : '';
@@ -423,7 +450,8 @@ function landRow(p) {
   return '<tr><td>Land</td><td><b>Public</b>' + (p.road ? ' road reserve' : nm ? ' – ' + esc(nm[0] || 'unnamed') + ' <span class="small">(' + esc(nm[1]) + ')</span>' : '') + '</td></tr>';
 }
 function statsHtml(s) {
-  if (!s.obsCount) return '</table><div class="gap" style="margin-top:4px">No iNaturalist plant records yet – worth a look!</div>';
+  const approx = s.vague ? '<div class="small" style="margin-top:3px">+ ' + s.vague + ' record' + (s.vague === 1 ? '' : 's') + ' with only a rough location (GPS ±200 m – 1 km) – not counted</div>' : '';
+  if (!s.obsCount) return '</table><div class="gap" style="margin-top:4px">No precise iNaturalist plant records yet – worth a look!</div>' + approx;
   let h = '<tr><td>iNat plant records</td><td>' + s.obsCount + '</td></tr>' +
     '<tr><td>Understorey plant groups</td><td><b>' + s.lfs.size + '</b></td></tr>' +
     '<tr><td>Native understorey species</td><td><b>' + s.und.size + '</b></td></tr>' +
@@ -475,8 +503,16 @@ function starAt(latlng) {
 }
 map.on('click', e => {
   const lng = e.latlng.lng, lat = e.latlng.lat;
-  const ok = obsAt(e.latlng);                              // a record dot under the click wins
-  if (ok >= 0) { L.popup({ autoPanPaddingTopLeft: [panelPad() + 10, 10] }).setLatLng([D.obs[ok][1], D.obs[ok][0]]).setContent(obsPopup(ok)).openOn(map); return; }
+  const dot = obsAt(e.latlng);                             // a record dot under the click wins
+  if (dot) {
+    const ll = [dot.rec[1], dot.rec[0]];
+    const pop = L.popup({ autoPanPaddingTopLeft: [panelPad() + 10, 10] }).setLatLng(ll).setContent(obsPopup(dot)).openOn(map);
+    if (dot.vague) {                                       // show the accuracy circle while the popup is open
+      const c = L.circle(ll, { radius: dot.rec[9], color: '#7a5200', weight: 1.5, dashArray: '5 4', fillColor: '#ffc61a', fillOpacity: 0.08, interactive: false }).addTo(map);
+      pop.on('remove', () => map.removeLayer(c));
+    }
+    return;
+  }
   const hit = arr => arr.find(u => pointIn(u.shape, lng, lat));
   const star = starAt(e.latlng), su = star && star.unit;
   const parcel = su ? (su.spi !== undefined ? su : null) : hit(shownParcels);
@@ -507,19 +543,24 @@ const bb = D.catchment ? decodeShape(D.catchment[1]).bb : D.meta.bbox;
 map.fitBounds([[bb[1], bb[0]], [bb[3], bb[2]]], { paddingTopLeft: [panelPad() + 20, 20], paddingBottomRight: [20, 20] });
 const built = new Date(D.meta.built).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 document.getElementById('intro').innerHTML =
-  '<p class="goal"><b>Our goal:</b> find out where native understorey plants still grow across the Upper Wimmera, so the Biolinks Team knows which patches to protect and link up.</p>' +
+  '<p class="goal"><b>Our goal:</b> find out where native understorey plants still grow across the ' + esc(REGIONS[REGION][0]) + ', so the Biolinks Team knows which patches to protect and link up.</p>' +
   '<ol class="steps">' +
   '<li><b>Find your block.</b> Use the layers button (top right) to switch between <b>satellite</b> view and <b>topographic</b> view, which shows roads and place names.</li>' +
   '<li><b>Look for sandy-coloured areas.</b> Nobody has recorded plants there on iNaturalist yet. Greens and blues show where people already have.</li>' +
   '<li><b>Click a parcel or roadside</b> for details, then go for a walk and photograph the plants you find in iNaturalist. Tick <b>Only show public land</b> below to see where you can go without asking a landholder.</li>' +
+  '<li><b>Be patient with your new records.</b> This map doesn’t update itself – it’s refreshed from iNaturalist every few days, so records you add may take a few days to appear here. <span class="small">(Last updated ' + built + '.)</span></li>' +
   '</ol>';
 document.getElementById('notes').innerHTML =
-  '“Native veg” colours only mapped native vegetation (2005) and roadside reserves; “whole parcel” colours every parcel. Records with hidden locations aren’t shown. Data built ' + built + '.';
+  '“Native veg” colours only mapped native vegetation (2005) and roadside reserves; “whole parcel” colours every parcel. Records with hidden locations aren’t shown, and records with only a rough location (GPS worse than 200 m) aren’t counted in the colours – turn on the record dots to see them faded. Data built ' + built + '.';
 buildSpeciesLayer();
 document.getElementById('newFinds').innerHTML = newFinds.length
   ? '<span class="star">★</span> <b>' + newFinds.length + ' new patch' + (newFinds.length === 1 ? '' : 'es') + ' found since ' + fmtDate(NEW_SINCE) + '</b><br><span class="small">Parcels and roadsides where native understorey was recorded for the first time. Can you find the next one?</span>'
   : '<span class="star">★</span> <b>No new patches yet since ' + fmtDate(NEW_SINCE) + '</b> – be the first!';
 
+const regionSel = document.getElementById('regionSel');
+for (const [k, [name]] of Object.entries(REGIONS)) regionSel.add(new Option(name, k, false, k === REGION));
+regionSel.addEventListener('change', () => { location.search = '?region=' + regionSel.value; });
+document.title = 'Biolinks Habitat Map – ' + REGIONS[REGION][0];
 document.getElementById('toggle').addEventListener('click', e => { const b = document.getElementById('panelBody'); const hide = b.style.display !== 'none'; b.style.display = hide ? 'none' : ''; e.target.textContent = hide ? 'Show' : 'Hide'; });
 if (PUB) document.getElementById('publicCtl').style.display = '';
 document.getElementById('showStars').addEventListener('change', e => { if (e.target.checked) starLayer.addTo(map); else map.removeLayer(starLayer); });
