@@ -62,6 +62,7 @@ WFS_LAYERS = {
 # water production, earth resources, plantations, Commonwealth and uncategorised land are left out.
 WALKABLE_MMTGEN = {'NATIONAL PARKS ACT AND NATURE CONSERVATION RESERVES', 'OTHER CONSERVATION RESERVES', 'STATE FOREST'}
 WALKABLE_OTHER_REC_CAT = {'NATURAL FEATURES RESERVE', 'COMMUNITY USE AREA'}
+ROAD_PARCEL_COVERED = 0.5     # road parcels at least this much covered by roadside sections merge into them
 PUBLIC_SHARE = 0.5            # a parcel counts as public if at least this share of it is walkable public land
 
 
@@ -747,18 +748,39 @@ def main():
         n = len(cand)
         kind = np.zeros(n, int)
         unit = np.full(n, -1, int)
-        if parcel_g and n:
-            pi, ui = STRtree(parcel_g).query(pts_m, predicate='intersects')
+        # Road parcels (surveyed road lots) that roadside sections already cover are treated as part of the
+        # roadside: records there go to the roadside section, and the viewer doesn't colour or star them.
+        road_covered = set()
+        road_idx = [i for i, f in enumerate(parcel_f) if f['p'].get('parcel_road') == 'Y']
+        if road_idx and road_g_m:
+            rg = np.asarray([parcel_g[i] for i in road_idx], dtype=object)
+            ri, si = STRtree(road_g_m).query(rg, predicate='intersects')
+            cov = np.zeros(len(rg))
+            np.add.at(cov, ri, shapely.area(shapely.intersection(rg[ri], np.asarray(road_g_m, dtype=object)[si])))
+            road_covered = {road_idx[k] for k in np.nonzero(cov / np.maximum(shapely.area(rg), 1e-9) >= ROAD_PARCEL_COVERED)[0]}
+        log(f'Road parcels: {len(road_idx):,}, of which {len(road_covered):,} are covered by roadside sections and merged into them')
+
+        def place_in_parcels(sel, mask):
+            if not sel or not mask.any():
+                return
+            sel = np.asarray(sel)
+            pi, ui = STRtree([parcel_g[i] for i in sel]).query(pts_m[mask], predicate='intersects')
+            idx = np.nonzero(mask)[0]
             best = np.full(n, np.iinfo(np.int64).max)
-            np.minimum.at(best, pi, ui)          # first parcel in list order wins (as the builder)
+            np.minimum.at(best, idx[pi], sel[ui])          # first parcel in list order wins (as the builder)
             hit = best < np.iinfo(np.int64).max
             kind[hit], unit[hit] = 1, best[hit]
+
+        if parcel_g and n:
+            place_in_parcels([i for i in range(len(parcel_g)) if i not in road_covered], np.ones(n, bool))
         if road_g_m and n:
             pi, ui = STRtree(road_g_m).query(pts_m, predicate='intersects')
             best = np.full(n, -1)
             np.maximum.at(best, pi, ui)          # builder keeps the last roadside hit
             hit = (best >= 0) & (kind == 0)
             kind[hit], unit[hit] = 2, best[hit]
+        if road_covered and n:                   # a covered road parcel still takes records no section reaches
+            place_in_parcels(sorted(road_covered), kind == 0)
         inside = shapely.intersects(area, pts_m) if n else np.array([], bool)
         keep = (kind > 0) | inside
         outside = int((~keep).sum())
@@ -959,6 +981,7 @@ def main():
             'catchment': ['Upper Wimmera', encode_m([catchment], GROUP_SIMPLIFY_M)[0], outside_stats] if catchment is not None else None,
             'parcelGroup': parcel_group.tolist(), 'roadsideGroup': roadside_group.tolist(), 'obsGroup': obs_group.tolist(),
             # walkable public land (PLM25 parks, reserves, state forest, frontages, community reserves; road parcels)
+            'parcelRoadMerged': sorted(int(i) for i in road_covered),    # road parcels shown as part of the roadside sections
             'parcelPublic': parcel_public, 'parcelPublicName': parcel_public_name, 'vegPublic': veg_public,
         }
         text = ('// Biolinks map data – built ' + output['meta']['built'] + ' by build_biolinks_data.py\n'

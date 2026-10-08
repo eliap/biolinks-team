@@ -148,7 +148,10 @@ const T = D.taxa;
 // ---------- Units: parcels & roadside sections ----------
 const newStats = () => ({ obsCount: 0, all: new Map(), und: new Set(), intro: new Set(), lfs: new Set() });
 const PUB = D.parcelPublic, PUBNAME = D.parcelPublicName || {}, VEGPUB = D.vegPublic;
-const parcels = D.parcels.map(([spi, pfi, road, ha, g], i) => ({ i, spi, pfi, road, ha, shape: decodeShape(g), stats: newStats(), pub: PUB ? PUB[i] : 1 }));
+// road parcels (surveyed road lots) already covered by roadside sections are shown as part of the roadside
+const MERGED = new Set(D.parcelRoadMerged || []);
+const parcels = D.parcels.map(([spi, pfi, road, ha, g], i) => ({ i, spi, pfi, road, ha, shape: decodeShape(g), stats: newStats(), pub: PUB ? PUB[i] : 1, merged: MERGED.has(i) }));
+const shownParcels = parcels.filter(p => !p.merged);
 const roadsides = D.roadsides.map(([road, lengthM, ha, g], i) => ({ i, road, lengthM, ha, shape: decodeShape(g), stats: newStats() }));
 const props = D.props.map(([pfi, propnum, addrs, g]) => ({ pfi, propnum, addrs, shape: decodeShape(g) }));
 // 'New finds': parcels and roadsides whose first native understorey record was observed on or after this date
@@ -310,7 +313,7 @@ function starPoint(u) {
   try { return turf.pointOnFeature(f).geometry.coordinates; } catch (e) {}
   const b = u.shape.bb; return [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2];
 }
-const newFinds = [...parcels, ...roadsides].filter(u => u.firstNew && !u.undBefore).map(u => {
+const newFinds = [...shownParcels, ...roadsides].filter(u => u.firstNew && !u.undBefore).map(u => {
   const c = starPoint(u); return { u: (c[0] + 180) / 360, v: mercV(c[1]), unit: u, pub: u.pub ?? 1 };
 });
 function drawStar(ctx, x, y, R) {
@@ -339,10 +342,10 @@ function vegPiecesOf(p) {
 function buildSpeciesLayer() {
   const items = [];
   if (shadeMode === 'parcel') {
-    for (const p of parcels) if (!publicOnly || p.pub) items.push({ s: p.shape, u: p });
+    for (const p of shownParcels) if (!publicOnly || p.pub) items.push({ s: p.shape, u: p });
   } else {
     vegShapes.forEach((s, i) => { if (!publicOnly || !VEGPUB || VEGPUB[i]) items.push({ s, u: NONE }); });   // base: all native veg as 'no records'
-    for (const p of parcels) if (p.stats.obsCount && (!publicOnly || p.pub)) for (const s of vegPiecesOf(p)) items.push({ s, u: p });
+    for (const p of shownParcels) if (p.stats.obsCount && (!publicOnly || p.pub)) for (const s of vegPiecesOf(p)) items.push({ s, u: p });
   }
   speciesItems = items;
   speciesLayer.redraw();
@@ -405,6 +408,11 @@ function panelPad() {
   const el = document.querySelector('.panel');
   return window.innerWidth > 600 && el && document.getElementById('panelBody').style.display !== 'none' ? el.offsetLeft + el.offsetWidth + 10 : 0;
 }
+// note the surveyed road lot under a roadside click, if any
+function roadLotRow(lng, lat) {
+  const lot = parcels.find(p => p.merged && pointIn(p.shape, lng, lat));
+  return lot ? '<tr><td>Surveyed road lot</td><td>' + esc(lot.spi || lot.pfi) + '</td></tr>' : '';
+}
 // a click on (or right next to) a star opens the popup for the place that star belongs to – a road parcel and
 // the roadside section over it can both have stars, and otherwise the parcel would always win
 function starAt(latlng) {
@@ -422,14 +430,14 @@ map.on('click', e => {
   const lng = e.latlng.lng, lat = e.latlng.lat;
   const hit = arr => arr.find(u => pointIn(u.shape, lng, lat));
   const star = starAt(e.latlng), su = star && star.unit;
-  const parcel = su ? (su.spi !== undefined ? su : null) : hit(parcels);
+  const parcel = su ? (su.spi !== undefined ? su : null) : hit(shownParcels);
   const road = su ? (su.spi === undefined ? su : null) : parcel ? null : hit(roadsides);
   const prop = parcel ? hit(props) : null;
   let html = '';
   if (road) {
     html += '<h3>Roadside: ' + esc(road.road) + '</h3><table>' +
       (road.lengthM ? '<tr><td>Section length</td><td>~' + Math.round(road.lengthM / 10) * 10 + ' m</td></tr>' : '') +
-      '<tr><td>Reserve area</td><td>' + road.ha.toFixed(2) + ' ha</td></tr>' + (PUB ? '<tr><td>Land</td><td><b>Public</b> road reserve</td></tr>' : '') + statsHtml(road.stats) + newFindHtml(road);
+      '<tr><td>Reserve area</td><td>' + road.ha.toFixed(2) + ' ha</td></tr>' + (PUB ? '<tr><td>Land</td><td><b>Public</b> road reserve</td></tr>' : '') + roadLotRow(lng, lat) + statsHtml(road.stats) + newFindHtml(road);
   }
   if (parcel) {
     const vh = vegHa(parcel);
