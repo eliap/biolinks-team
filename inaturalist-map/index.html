@@ -384,7 +384,7 @@ const obsLayer = new PolyTiles({ pane: 'obs', draw: (ctx, tb, scale, ox, oy) => 
   }
 } });
 function obsAt(latlng) {
-  if (!map.hasLayer(obsLayer)) return -1;
+  if (!map.hasLayer(obsLayer)) return null;
   const scale = 256 * Math.pow(2, map.getZoom()), u = (latlng.lng + 180) / 360, v = mercV(latlng.lat);
   let best = null, bd = 7 * 7;
   for (const p of obsPts) {                                 // later (precise) dots win ties, as they're drawn on top
