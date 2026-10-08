@@ -164,35 +164,84 @@ const PolyTiles = L.GridLayer.extend({
   createTile(c) {
     const tile = document.createElement('canvas'), r = window.devicePixelRatio || 1;
     tile.width = tile.height = 256 * r;
-    const ctx = tile.getContext('2d'); ctx.scale(r, r); ctx.lineJoin = 'round';
+    // CPU-backed canvas: many small paths rasterise ~4x faster in software than on the GPU
+    const ctx = tile.getContext('2d', { willReadFrequently: true }); ctx.scale(r, r); ctx.lineJoin = 'round';
     const scale = 256 * Math.pow(2, c.z), ox = c.x * 256, oy = c.y * 256, pad = 6 / scale;
     const tb = [ox / scale - pad, oy / scale - pad, (ox + 256) / scale + pad, (oy + 256) / scale + pad];
-    this.options.draw(ctx, tb, scale, ox, oy);
+    this.options.draw(ctx, tb, scale, ox, oy, c.z);
     return tile;
   }
 });
-function drawShapes(items, styleOf) {
-  return (ctx, tb, scale, ox, oy) => {
-    for (const it of items()) {
-      const s = it.s, b = s.mb;
+
+// Spatial index: shapes bucketed into a grid of zoom-12-tile-sized cells (0–1 Mercator units),
+// so each tile only looks at shapes near it instead of all ~90,000.
+const CELL = 1 / 4096, MAX_CELLS = 256;
+function buildIndex(items) {
+  const cells = new Map(), big = [];
+  items.forEach((it, i) => {
+    it._i = i;
+    const b = it.s.mb, x0 = Math.floor(b[0] / CELL), x1 = Math.floor(b[2] / CELL), y0 = Math.floor(b[1] / CELL), y1 = Math.floor(b[3] / CELL);
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) > MAX_CELLS) { big.push(it); return; }
+    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) {
+      const k = x * 8192 + y; let a = cells.get(k); if (!a) cells.set(k, a = []); a.push(it);
+    }
+  });
+  return { cells, big };
+}
+let queryStamp = 0;
+function query(idx, items, tb) {
+  const x0 = Math.floor(tb[0] / CELL), x1 = Math.floor(tb[2] / CELL), y0 = Math.floor(tb[1] / CELL), y1 = Math.floor(tb[3] / CELL);
+  if ((x1 - x0 + 1) * (y1 - y0 + 1) > 4096) return items;      // zoomed far out: just scan everything
+  const q = ++queryStamp, out = [];
+  const add = it => { if (it._q !== q) { it._q = q; out.push(it); } };
+  for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) { const a = idx.cells.get(x * 8192 + y); if (a) for (const it of a) add(it); }
+  for (const it of idx.big) add(it);
+  return out.sort((a, b) => a._i - b._i);                       // keep draw order (base veg first)
+}
+
+// Draw one tile: shapes are grouped by colour and filled ~20 at a time (one huge path is much slower
+// in Chrome, one fill per shape wastes calls), points less than a pixel apart are skipped, and
+// outlines only appear from zoom 13.
+const SHAPES_PER_FILL = 20, DOTS_PER_FILL = 500;
+function drawShapes(getItems, styleOf) {
+  let idxFor = null, idx = null;
+  return (ctx, tb, scale, ox, oy, z) => {
+    const items = getItems();
+    if (idxFor !== items) { idx = buildIndex(items); idxFor = items; }
+    const groups = new Map();                                     // style -> shapes, in first-seen order
+    for (const it of query(idx, items, tb)) {
+      const b = it.s.mb;
       if (b[0] > tb[2] || b[2] < tb[0] || b[1] > tb[3] || b[3] < tb[1]) continue;
       const st = styleOf(it); if (!st) continue;
-      const w = (b[2] - b[0]) * scale, h = (b[3] - b[1]) * scale;
-      if (w < 1.5 && h < 1.5) {                 // smaller than a pixel or so: a dot of colour
+      let g = groups.get(st); if (!g) groups.set(st, g = { polys: [], dots: [] });
+      ((b[2] - b[0]) * scale < 1.5 && (b[3] - b[1]) * scale < 1.5 ? g.dots : g.polys).push(it);
+    }
+    const outlines = z >= 13;
+    for (const [st, g] of groups) {
+      if (g.dots.length) {                                        // smaller than a pixel or so: a dot of colour
         ctx.globalAlpha = Math.max(st.fillOpacity, 0.6); ctx.fillStyle = st.fill;
-        ctx.fillRect(b[0] * scale - ox, b[1] * scale - oy, Math.max(w, 1), Math.max(h, 1));
-        continue;
-      }
-      ctx.beginPath();
-      for (const poly of s.mp) for (const ring of poly) {
-        for (let i = 0; i < ring.length; i += 2) {
-          const x = ring[i] * scale - ox, y = ring[i + 1] * scale - oy;
-          if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+        for (let k = 0; k < g.dots.length; k += DOTS_PER_FILL) {
+          ctx.beginPath();
+          for (const it of g.dots.slice(k, k + DOTS_PER_FILL)) { const b = it.s.mb; ctx.rect(b[0] * scale - ox, b[1] * scale - oy, Math.max((b[2] - b[0]) * scale, 1), Math.max((b[3] - b[1]) * scale, 1)); }
+          ctx.fill();
         }
-        ctx.closePath();
       }
-      ctx.globalAlpha = st.fillOpacity; ctx.fillStyle = st.fill; ctx.fill('evenodd');
-      ctx.globalAlpha = st.opacity; ctx.strokeStyle = st.color; ctx.lineWidth = st.weight; ctx.stroke();
+      for (let k = 0; k < g.polys.length; k += SHAPES_PER_FILL) {
+        ctx.beginPath();
+        for (const it of g.polys.slice(k, k + SHAPES_PER_FILL)) for (const poly of it.s.mp) for (const ring of poly) {
+          const n = ring.length;
+          let lx = ring[0] * scale - ox, ly = ring[1] * scale - oy;
+          ctx.moveTo(lx, ly);
+          for (let i = 2; i < n; i += 2) {
+            const x = ring[i] * scale - ox, y = ring[i + 1] * scale - oy;
+            if (i < n - 2 && Math.abs(x - lx) < 0.7 && Math.abs(y - ly) < 0.7) continue;   // under a pixel from the last point
+            ctx.lineTo(x, y); lx = x; ly = y;
+          }
+          ctx.closePath();
+        }
+        ctx.globalAlpha = st.fillOpacity; ctx.fillStyle = st.fill; ctx.fill('evenodd');
+        if (outlines) { ctx.globalAlpha = st.opacity; ctx.strokeStyle = st.color; ctx.lineWidth = st.weight; ctx.stroke(); }
+      }
     }
   };
 }
