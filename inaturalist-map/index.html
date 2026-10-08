@@ -76,6 +76,9 @@
     <label><input type="checkbox" id="publicOnly"> <b>Only show public land</b></label>
     <div class="small">Parks, reserves, state forest, creek frontages and roadsides – places you can walk without asking a landholder.</div>
   </div>
+  <div class="ctl">
+    <label><input type="checkbox" id="showStars" checked> <b>Show <span class="star">★</span> on new finds</b></label>
+  </div>
   <div id="spLegend" class="small"></div>
   <div class="small" id="notes" style="margin-top:8px"></div>
   </div>
@@ -448,6 +451,7 @@ document.getElementById('newFinds').innerHTML = newFinds.length
 
 document.getElementById('toggle').addEventListener('click', e => { const b = document.getElementById('panelBody'); const hide = b.style.display !== 'none'; b.style.display = hide ? 'none' : ''; e.target.textContent = hide ? 'Show' : 'Hide'; });
 if (PUB) document.getElementById('publicCtl').style.display = '';
+document.getElementById('showStars').addEventListener('change', e => { if (e.target.checked) starLayer.addTo(map); else map.removeLayer(starLayer); });
 document.getElementById('publicOnly').addEventListener('change', e => { publicOnly = e.target.checked; buildSpeciesLayer(); starLayer.redraw(); });
 document.getElementById('countMode').addEventListener('change', e => { countMode = e.target.value; speciesLayer.redraw(); roadsideLayer.redraw(); updateLegend(); });
 document.querySelectorAll('input[name=shade]').forEach(r => r.addEventListener('change', e => { shadeMode = e.target.value; buildSpeciesLayer(); }));
