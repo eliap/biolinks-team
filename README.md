@@ -20,7 +20,8 @@ Native understorey and habitat by parcel and roadside section for the Upper Wimm
 python -m venv .venv
 .venv\Scripts\python -m pip install shapely pyproj pyshp requests
 .venv\Scripts\python build_biolinks_data.py                 # whole Upper Wimmera (~35 min first time, ~3 min from cache)
-.venv\Scripts\python build_biolinks_data.py --refresh-inat  # pick up new iNaturalist records
+.venv\Scripts\python build_biolinks_data.py --update-inat   # quick (~5 min): add iNaturalist records made since the last download
+.venv\Scripts\python build_biolinks_data.py --refresh-inat  # full (~35 min): re-download all iNaturalist records, picking up edits and deletions
 .venv\Scripts\python build_biolinks_data.py --group "Navarre"
 .venv\Scripts\python build_biolinks_data.py --groups-only   # only land inside the Landcare groups
 ```

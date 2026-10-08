@@ -9,7 +9,8 @@ works over the whole Landcare area instead of a small test square.
   .venv\\Scripts\\python build_biolinks_data.py --groups-only       # only land inside the Landcare groups
   .venv\\Scripts\\python build_biolinks_data.py --group "Stawell Urban"
   .venv\\Scripts\\python build_biolinks_data.py --square=-37.214978,142.797641,15  # same area as the browser builder
-  .venv\\Scripts\\python build_biolinks_data.py --refresh-inat      # re-download iNaturalist only
+  .venv\\Scripts\\python build_biolinks_data.py --update-inat       # quick: add iNaturalist records made since the last download (~4 min)
+  .venv\\Scripts\\python build_biolinks_data.py --refresh-inat      # full iNaturalist re-download (~35 min; also picks up edits/deletions)
   .venv\\Scripts\\python build_biolinks_data.py --refresh           # re-download everything
 
 Downloads are cached in cache/ (one file per page), so an interrupted run carries on
@@ -336,29 +337,10 @@ def trim_obs(o):
             't': {k: t.get(k) for k in ('id', 'name', 'rank_level', 'min_species_taxon_id', 'preferred_common_name', 'introduced')} if t else None}
 
 
-def download_inat(cache, bbox, refresh):
-    idir = cache / 'inat'
-    if not refresh:
-        hit = find_cache(idir, 'inat', bbox)
-        if hit:
-            log(f'iNaturalist: using cache ({hit[2]["count"]:,} records, downloaded {hit[2]["downloaded"][:10]}; --refresh-inat for new records)')
-            return load_inat(hit[1])
-    d = idir / f'inat_{bbox_key(bbox)}'
-    if refresh and d.exists():
-        shutil.rmtree(d)
-    d.mkdir(parents=True, exist_ok=True)
+def fetch_inat(d, bbox, id_above, page_no, n):
+    """Download plant records with id > id_above into page files in d, about one request per second."""
     W, S, E, N = bbox
-    pages = sorted(d.glob('page_*.json.gz'))
-    id_above, n = 0, 0
-    if pages:   # resume an interrupted download
-        for p in pages:
-            recs = read_gz(p)['results']
-            n += len(recs)
-            if recs:
-                id_above = max(id_above, recs[-1]['id'])
-        log(f'iNaturalist: resuming after {n:,} cached records')
-    page_no = len(pages)
-    last = 0.0
+    last, added, first = 0.0, 0, True
     while True:
         params = {'iconic_taxa': 'Plantae', 'verifiable': 'true', 'geoprivacy': 'open', 'taxon_geoprivacy': 'open',
                   'swlat': S, 'swlng': W, 'nelat': N, 'nelng': E, 'preferred_place_id': 7830, 'locale': 'en',
@@ -369,15 +351,60 @@ def download_inat(cache, bbox, refresh):
         last = time.time()
         j = get_json(INAT, params, label='iNaturalist')
         res = [trim_obs(o) for o in j.get('results', [])]
-        if page_no == 0 or page_no % 20 == 0:
-            log(f'  iNaturalist: {n:,} of ~{n + j.get("total_results", 0):,} records…')
+        if first or page_no % 20 == 0:
+            log(f'  iNaturalist: {n:,} records so far, ~{j.get("total_results", 0):,} still to download…')
+        first = False
         if res:
             write_gz(d / f'page_{page_no:05d}.json.gz', {'results': res})
             page_no += 1
             n += len(res)
+            added += len(res)
             id_above = res[-1]['id']
         if len(res) < 200:
-            break
+            return n, added
+
+
+def cached_max_id(d):
+    """Number of cached records and the highest observation id among them."""
+    n, top = 0, 0
+    for p in sorted(d.glob('page_*.json.gz')):
+        recs = read_gz(p)['results']
+        n += len(recs)
+        if recs:
+            top = max(top, max(o['id'] for o in recs))
+    return n, top
+
+
+def download_inat(cache, bbox, refresh, update=False):
+    idir = cache / 'inat'
+    if not refresh:
+        hit = find_cache(idir, 'inat', bbox)
+        if hit and update:
+            # quick update: only records newer than the newest one already cached (edits to old records are not picked up)
+            d, meta = hit[1], hit[2]
+            n, top = cached_max_id(d)
+            page_no = len(list(d.glob('page_*.json.gz')))
+            log(f'iNaturalist: {n:,} cached records (downloaded {meta["downloaded"][:10]}'
+                f'{", last updated " + meta["updated"][:10] if meta.get("updated") else ""}); fetching newer records…')
+            n, added = fetch_inat(d, meta['bbox'], top, page_no, n)
+            meta.update(count=n, updated=datetime.now(timezone.utc).isoformat())
+            (d / 'complete.json').write_text(json.dumps(meta))
+            log(f'iNaturalist: {added:,} new plant records added ({n:,} in total)')
+            return load_inat(d)
+        if hit:
+            log(f'iNaturalist: using cache ({hit[2]["count"]:,} records, downloaded {hit[2]["downloaded"][:10]}'
+                f'{", updated " + hit[2]["updated"][:10] if hit[2].get("updated") else ""}; --update-inat for new records)')
+            return load_inat(hit[1])
+        if update:
+            log('iNaturalist: nothing cached to update yet – doing a full download')
+    d = idir / f'inat_{bbox_key(bbox)}'
+    if refresh and d.exists():
+        shutil.rmtree(d)
+    d.mkdir(parents=True, exist_ok=True)
+    n, id_above = cached_max_id(d)
+    if n:   # resume an interrupted download
+        log(f'iNaturalist: resuming after {n:,} cached records')
+    n, _ = fetch_inat(d, bbox, id_above, len(list(d.glob('page_*.json.gz'))), n)
     (d / 'complete.json').write_text(json.dumps({'bbox': bbox, 'count': n, 'downloaded': datetime.now(timezone.utc).isoformat()}))
     log(f'iNaturalist: {n:,} plant records downloaded')
     return load_inat(d)
@@ -596,7 +623,8 @@ def main():
     ap.add_argument('--group', action='append', help='only build this Landcare group (name or part of it); repeatable')
     ap.add_argument('--square', help='--square=lat,lng,km (note the =): build a square like the browser builder instead of the group area')
     ap.add_argument('--refresh', action='store_true', help='re-download everything')
-    ap.add_argument('--refresh-inat', action='store_true', help='re-download iNaturalist records only')
+    ap.add_argument('--refresh-inat', action='store_true', help='re-download all iNaturalist records (~35 min; picks up edits and deletions too)')
+    ap.add_argument('--update-inat', action='store_true', help='quick update: download only iNaturalist records added since the last download')
     ap.add_argument('--groups-only', action='store_true', help='only build land inside the Landcare group polygons')
     ap.add_argument('--boundaries', default=str(HERE / 'landcare' / 'All Upper Wimmera Landcares.shp'))
     ap.add_argument('--catchment', default=str(HERE / 'landcare' / 'network data' / 'wca_LandcareNetworks_2007_mga54.shp'),
@@ -656,7 +684,7 @@ def main():
     # ---- 1. downloads ----
     with Stage('Downloads'):
         with ThreadPoolExecutor(max_workers=4) as ex:
-            inat_f = ex.submit(download_inat, cache, bbox, args.refresh or args.refresh_inat)
+            inat_f = ex.submit(download_inat, cache, bbox, args.refresh or args.refresh_inat, args.update_inat)
             futs = {layer: ex.submit(download_wfs, cache, layer, bbox, args.refresh) for layer in
                     ['nv2005_evcbcs', 'v_parcel_mp', 'v_property_mp', 'tr_road', 'road_casement_polygon', 'address', 'plm25']}
             raw = {k: f.result() for k, f in futs.items()}
