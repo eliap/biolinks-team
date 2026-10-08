@@ -179,7 +179,7 @@ const shownParcels = parcels.filter(p => !p.merged);
 const roadsides = D.roadsides.map(([road, lengthM, ha, g], i) => ({ i, road, lengthM, ha, shape: decodeShape(g), stats: newStats() }));
 const props = D.props.map(([pfi, propnum, addrs, g]) => ({ pfi, propnum, addrs, shape: decodeShape(g) }));
 // 'New finds': parcels and roadsides whose first native understorey record was observed on or after this date
-const NEW_SINCE = '2026-07-01';
+const NEW_SINCE = '2026-09-01';
 const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 for (const o of D.obs) {
   const [, , id, , , , , kind, idx] = o;
