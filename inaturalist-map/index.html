@@ -65,8 +65,12 @@
     </select>
   </div>
   <div class="ctl">Show colour on:
-    <label><input type="radio" name="shade" value="veg" checked> native veg</label>
-    <label><input type="radio" name="shade" value="parcel"> whole parcel</label>
+    <label><input type="radio" name="shade" value="parcel" checked> whole parcel</label>
+    <label><input type="radio" name="shade" value="veg"> native veg</label>
+  </div>
+  <div class="ctl" id="publicCtl" style="display:none">
+    <label><input type="checkbox" id="publicOnly"> <b>Only show public land</b></label>
+    <div class="small">Parks, reserves, state forest, creek frontages and roadsides – places you can walk without asking a landholder.</div>
   </div>
   <div id="spLegend" class="small"></div>
   <div class="small" id="notes" style="margin-top:8px"></div>
@@ -98,10 +102,17 @@ function decodeShape(enc) {
       }
       rs.push(ll); ms.push(m);
     }
+    // consistent winding (outer rings one way, holes the other) so batched 'nonzero' fills
+    // keep overlapping shapes filled and holes empty
+    for (let k = 0; k < ms.length; k++) {
+      if ((ringArea(ms[k]) > 0) !== (k === 0)) { rs[k] = reverseRing(rs[k]); ms[k] = reverseRing(ms[k]); }
+    }
     polys.push(rs); mp.push(ms);
   }
   return { polys, mp, bb: [W, S, E, N], mb: [(W + 180) / 360, mercV(N), (E + 180) / 360, mercV(S)] };
 }
+function ringArea(r) { let a = 0; for (let i = 0, j = r.length - 2; i < r.length; j = i, i += 2) a += (r[j] - r[i]) * (r[j + 1] + r[i + 1]); return a; }
+function reverseRing(r) { const o = new Float64Array(r.length); for (let i = 0, n = r.length; i < n; i += 2) { o[n - 2 - i] = r[i]; o[n - 1 - i] = r[i + 1]; } return o; }
 function toGeoJSON(s) {
   return { type: 'Feature', properties: {}, geometry: { type: 'MultiPolygon', coordinates: s.polys.map(rs => rs.map(r => {
     const out = []; for (let i = 0; i < r.length; i += 2) out.push([r[i], r[i + 1]]); return out;
@@ -129,7 +140,8 @@ const T = D.taxa;
 
 // ---------- Units: parcels & roadside sections ----------
 const newStats = () => ({ obsCount: 0, all: new Map(), und: new Set(), intro: new Set(), lfs: new Set() });
-const parcels = D.parcels.map(([spi, pfi, road, ha, g], i) => ({ i, spi, pfi, road, ha, shape: decodeShape(g), stats: newStats() }));
+const PUB = D.parcelPublic, PUBNAME = D.parcelPublicName || {}, VEGPUB = D.vegPublic;
+const parcels = D.parcels.map(([spi, pfi, road, ha, g], i) => ({ i, spi, pfi, road, ha, shape: decodeShape(g), stats: newStats(), pub: PUB ? PUB[i] : 1 }));
 const roadsides = D.roadsides.map(([road, lengthM, ha, g], i) => ({ i, road, lengthM, ha, shape: decodeShape(g), stats: newStats() }));
 const props = D.props.map(([pfi, propnum, addrs, g]) => ({ pfi, propnum, addrs, shape: decodeShape(g) }));
 for (const o of D.obs) {
@@ -199,9 +211,10 @@ function query(idx, items, tb) {
   return out.sort((a, b) => a._i - b._i);                       // keep draw order (base veg first)
 }
 
-// Draw one tile: shapes are grouped by colour and filled ~20 at a time (one huge path is much slower
-// in Chrome, one fill per shape wastes calls), points less than a pixel apart are skipped, and
-// outlines only appear from zoom 13.
+// Draw one tile: shapes are grouped by colour and filled ~20 at a time with the 'nonzero' rule (rings are
+// wound consistently in decodeShape, so identical stacked shapes – e.g. a recorded parcel's veg over the
+// base veg – stay filled; one huge path is slow in Chrome), points less than a pixel apart are skipped,
+// and outlines only appear from zoom 13.
 const SHAPES_PER_FILL = 20, DOTS_PER_FILL = 500;
 function drawShapes(getItems, styleOf) {
   let idxFor = null, idx = null;
@@ -239,7 +252,7 @@ function drawShapes(getItems, styleOf) {
           }
           ctx.closePath();
         }
-        ctx.globalAlpha = st.fillOpacity; ctx.fillStyle = st.fill; ctx.fill('evenodd');
+        ctx.globalAlpha = st.fillOpacity; ctx.fillStyle = st.fill; ctx.fill('nonzero');
         if (outlines) { ctx.globalAlpha = st.opacity; ctx.strokeStyle = st.color; ctx.lineWidth = st.weight; ctx.stroke(); }
       }
     }
@@ -253,7 +266,7 @@ const BINS = {
   sp: [[1, 1], [2, 3], [4, 6], [7, 10], [11, 20], [21, Infinity]]
 };
 const NO_RECORDS = '#e3cf9f';
-let countMode = 'lf', shadeMode = 'veg';
+let countMode = 'lf', shadeMode = 'parcel', publicOnly = false;
 const bins = () => countMode === 'lf' ? BINS.lf : BINS.sp;
 function count(u) {
   const s = u.stats;
@@ -286,10 +299,10 @@ function vegPiecesOf(p) {
 function buildSpeciesLayer() {
   const items = [];
   if (shadeMode === 'parcel') {
-    for (const p of parcels) items.push({ s: p.shape, u: p });
+    for (const p of parcels) if (!publicOnly || p.pub) items.push({ s: p.shape, u: p });
   } else {
-    for (const s of vegShapes) items.push({ s, u: NONE });                           // base: all native veg as 'no records'
-    for (const p of parcels) if (p.stats.obsCount) for (const s of vegPiecesOf(p)) items.push({ s, u: p });
+    vegShapes.forEach((s, i) => { if (!publicOnly || !VEGPUB || VEGPUB[i]) items.push({ s, u: NONE }); });   // base: all native veg as 'no records'
+    for (const p of parcels) if (p.stats.obsCount && (!publicOnly || p.pub)) for (const s of vegPiecesOf(p)) items.push({ s, u: p });
   }
   speciesItems = items;
   speciesLayer.redraw();
@@ -311,6 +324,12 @@ function tags(t) {
          (t[3] === 'P' ? '<span class="tag plant">PLANTED / NOT LOCAL</span>' : '') +
          (t[3] === 'N' && !t[4] ? '<span class="tag other">' + (t[2] === 'TREE' ? 'TREE' : t[2] === 'MIS' ? 'MISTLETOE' : 'NOT UNDERSTOREY') + '</span>' : '') +
          (t[5] === 'unclassified' ? '<span class="tag other">UNCLASSIFIED</span>' : '');
+}
+function landRow(p) {
+  if (!PUB) return '';
+  if (!p.pub) return '<tr><td>Land</td><td><b>Private</b> – ask the landholder before visiting</td></tr>';
+  const nm = PUBNAME[p.i];
+  return '<tr><td>Land</td><td><b>Public</b>' + (p.road ? ' road reserve' : nm ? ' – ' + esc(nm[0] || 'unnamed') + ' <span class="small">(' + esc(nm[1]) + ')</span>' : '') + '</td></tr>';
 }
 function statsHtml(s) {
   if (!s.obsCount) return '</table><div class="gap" style="margin-top:4px">No iNaturalist plant records yet – worth a look!</div>';
@@ -355,13 +374,13 @@ map.on('click', e => {
   if (road) {
     html += '<h3>Roadside: ' + esc(road.road) + '</h3><table>' +
       (road.lengthM ? '<tr><td>Section length</td><td>~' + Math.round(road.lengthM / 10) * 10 + ' m</td></tr>' : '') +
-      '<tr><td>Reserve area</td><td>' + road.ha.toFixed(2) + ' ha</td></tr>' + statsHtml(road.stats);
+      '<tr><td>Reserve area</td><td>' + road.ha.toFixed(2) + ' ha</td></tr>' + (PUB ? '<tr><td>Land</td><td><b>Public</b> road reserve</td></tr>' : '') + statsHtml(road.stats);
   }
   if (parcel) {
     const vh = vegHa(parcel);
     html += '<h3>Parcel ' + esc(parcel.spi || parcel.pfi) + (parcel.road ? ' <span class="small">(road)</span>' : '') + '</h3><table>' +
       '<tr><td>Area</td><td>' + parcel.ha.toFixed(1) + ' ha</td></tr>' +
-      '<tr><td>Native veg (2005)</td><td>' + vh.toFixed(1) + ' ha (' + Math.round(100 * vh / parcel.ha) + '%)</td></tr>' + statsHtml(parcel.stats);
+      '<tr><td>Native veg (2005)</td><td>' + vh.toFixed(1) + ' ha (' + Math.round(100 * vh / parcel.ha) + '%)</td></tr>' + landRow(parcel) + statsHtml(parcel.stats);
   }
   if (prop) {
     html += '<div class="sec"><b>Property:</b> ' + esc(prop.addrs[0] || 'No address recorded') +
@@ -380,13 +399,15 @@ document.getElementById('intro').innerHTML =
   '<ol class="steps">' +
   '<li><b>Find your block.</b> Use the layers button (top right) to switch between <b>satellite</b> view and <b>topographic</b> view, which shows roads and place names.</li>' +
   '<li><b>Look for sandy-coloured areas.</b> Nobody has recorded plants there on iNaturalist yet. Greens and blues show where people already have.</li>' +
-  '<li><b>Click a parcel or roadside</b> for details, then go for a walk (with permission on private land) and photograph the plants you find in iNaturalist.</li>' +
+  '<li><b>Click a parcel or roadside</b> for details, then go for a walk and photograph the plants you find in iNaturalist. Tick <b>Only show public land</b> below to see where you can go without asking a landholder.</li>' +
   '</ol>';
 document.getElementById('notes').innerHTML =
   '“Native veg” colours only mapped native vegetation (2005) and roadside reserves; “whole parcel” colours every parcel. Records with hidden locations aren’t shown. Data built ' + built + '.';
 buildSpeciesLayer();
 
 document.getElementById('toggle').addEventListener('click', e => { const b = document.getElementById('panelBody'); const hide = b.style.display !== 'none'; b.style.display = hide ? 'none' : ''; e.target.textContent = hide ? 'Show' : 'Hide'; });
+if (PUB) document.getElementById('publicCtl').style.display = '';
+document.getElementById('publicOnly').addEventListener('change', e => { publicOnly = e.target.checked; buildSpeciesLayer(); });
 document.getElementById('countMode').addEventListener('change', e => { countMode = e.target.value; speciesLayer.redraw(); roadsideLayer.redraw(); updateLegend(); });
 document.querySelectorAll('input[name=shade]').forEach(r => r.addEventListener('change', e => { shadeMode = e.target.value; buildSpeciesLayer(); }));
 </script>

@@ -55,7 +55,29 @@ WFS_LAYERS = {
     'nv2005_evcbcs': (None, ['evc', 'x_evcname', 'evc_bcs_desc', 'geom']),
     'road_casement_polygon': ('pfi', ['pfi', 'geom']),
     'tr_road': ('ufi', ['ufi', 'ezi_road_name_label', 'geom']),
+    'plm25': ('plm_id', ['plm_id', 'label', 'mmtgen', 'rec_cat', 'geom']),     # DEECA public land management
 }
+# Public land people can walk on without asking (PLM25). Conservative on purpose: services/utilities,
+# water production, earth resources, plantations, Commonwealth and uncategorised land are left out.
+WALKABLE_MMTGEN = {'NATIONAL PARKS ACT AND NATURE CONSERVATION RESERVES', 'OTHER CONSERVATION RESERVES', 'STATE FOREST'}
+WALKABLE_OTHER_REC_CAT = {'NATURAL FEATURES RESERVE', 'COMMUNITY USE AREA'}
+PUBLIC_SHARE = 0.5            # a parcel counts as public if at least this share of it is walkable public land
+
+
+def walkable(p):
+    mmt = (p.get('mmtgen') or '').strip().upper()
+    return mmt in WALKABLE_MMTGEN or (mmt == 'OTHER PUBLIC LAND' and (p.get('rec_cat') or '').strip().upper() in WALKABLE_OTHER_REC_CAT)
+
+
+def public_kind(p):
+    mmt = (p.get('mmtgen') or '').strip().upper()
+    if mmt.startswith('NATIONAL PARKS ACT'):
+        return 'park or nature reserve'
+    if mmt == 'OTHER CONSERVATION RESERVES':
+        return 'conservation reserve'
+    if mmt == 'STATE FOREST':
+        return 'state forest'
+    return 'water frontage or natural features reserve' if (p.get('rec_cat') or '').upper().startswith('NATURAL') else 'community reserve'
 INAT = 'https://api.inaturalist.org/v1/observations'
 USER_AGENT = 'biolinks-data-builder/1.0 (Project Platypus / Upper Wimmera Landcare habitat map; python-requests)'
 MAX_ACCURACY_M = 200
@@ -636,7 +658,7 @@ def main():
         with ThreadPoolExecutor(max_workers=4) as ex:
             inat_f = ex.submit(download_inat, cache, bbox, args.refresh or args.refresh_inat)
             futs = {layer: ex.submit(download_wfs, cache, layer, bbox, args.refresh) for layer in
-                    ['nv2005_evcbcs', 'v_parcel_mp', 'v_property_mp', 'tr_road', 'road_casement_polygon', 'address']}
+                    ['nv2005_evcbcs', 'v_parcel_mp', 'v_property_mp', 'tr_road', 'road_casement_polygon', 'address', 'plm25']}
             raw = {k: f.result() for k, f in futs.items()}
             obs_raw = inat_f.result()
 
@@ -664,6 +686,9 @@ def main():
             idx = np.array([], int)
         roads = [((road_feats[i]['p'].get('ezi_road_name_label') or 'Unnamed road'), road_g[i]) for i in idx]
         addr_f = raw.pop('address')
+        plm_f, plm_g = to_m(raw.pop('plm25'))
+        walk = [(f, g) for f, g in zip(plm_f, plm_g) if walkable(f['p'])]
+        log(f'Public land (PLM25): {len(plm_f):,} areas, {len(walk):,} walkable')
         log(f'Parcels {len(parcel_f):,} · properties {len(prop_f):,} · NV2005 patches {len(veg_f):,} · '
             f'road reserves {len(cas_f):,} · road centrelines {len(roads):,} · addresses {len(addr_f):,}')
 
@@ -745,6 +770,38 @@ def main():
         log(f'{len(recorded):,} parcels with records, {sum(len(v) for v in parcel_veg.values()):,} veg pieces')
 
     # ---- 6. Landcare group of every parcel, roadside section and record ----
+    with Stage('Public land'):
+        # share of each parcel (and native veg patch) inside walkable public land; road parcels are public
+        walk_g = [g for _, g in walk]
+        walk_tree = STRtree(walk_g) if walk_g else None
+
+        def public_share(geoms):
+            share = np.zeros(len(geoms))
+            best = [None] * len(geoms)
+            if walk_tree is None or not len(geoms):
+                return share, best
+            gi, wi = walk_tree.query(np.asarray(geoms, dtype=object), predicate='intersects')
+            inter = shapely.area(shapely.intersection(np.asarray(geoms, dtype=object)[gi], np.asarray(walk_g, dtype=object)[wi]))
+            np.add.at(share, gi, inter)
+            top = {}
+            for g, w, a in zip(gi, wi, inter):
+                if a > top.get(g, (0, None))[0]:
+                    top[g] = (a, w)
+            for g, (a, w) in top.items():
+                best[g] = w
+            return np.minimum(share / np.maximum(shapely.area(np.asarray(geoms, dtype=object)), 1e-9), 1.0), best
+
+        p_share, p_best = public_share(parcel_g)
+        parcel_public = [1 if (f['p'].get('parcel_road') == 'Y' or s >= PUBLIC_SHARE) else 0 for f, s in zip(parcel_f, p_share)]
+        parcel_public_name = {}
+        for i, (pub, w) in enumerate(zip(parcel_public, p_best)):
+            if pub and w is not None and p_share[i] >= PUBLIC_SHARE:
+                wp = walk[w][0]['p']
+                parcel_public_name[str(i)] = [(wp.get('label') or '').strip(), public_kind(wp)]
+        v_share, _ = public_share(veg_g)
+        veg_public = [1 if s >= PUBLIC_SHARE else 0 for s in v_share]
+        log(f'Public parcels: {sum(parcel_public):,} of {len(parcel_public):,} · public native veg patches: {sum(veg_public):,} of {len(veg_public):,}')
+
     with Stage('Assign Landcare groups'):
         g_geoms = [g['geom'] for g in groups]
         g_area = np.array([g.area for g in g_geoms])
@@ -873,6 +930,8 @@ def main():
             'groups': groups_out, 'groupStats': group_stats,
             'catchment': ['Upper Wimmera', encode_m([catchment], GROUP_SIMPLIFY_M)[0], outside_stats] if catchment is not None else None,
             'parcelGroup': parcel_group.tolist(), 'roadsideGroup': roadside_group.tolist(), 'obsGroup': obs_group.tolist(),
+            # walkable public land (PLM25 parks, reserves, state forest, frontages, community reserves; road parcels)
+            'parcelPublic': parcel_public, 'parcelPublicName': parcel_public_name, 'vegPublic': veg_public,
         }
         text = ('// Biolinks map data – built ' + output['meta']['built'] + ' by build_biolinks_data.py\n'
                 'window.BIOLINKS_DATA = ' + json.dumps(output, separators=(',', ':')) + ';\n')
