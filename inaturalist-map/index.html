@@ -41,6 +41,9 @@
   .sec { margin-top: 8px; border-top: 1px solid #ddd; padding-top: 6px; }
   .err { color: #b42318; font-weight: 600; }
   .gap { font-weight: 600; color: #7a5a00; }
+  .newfinds { margin: 8px 0 2px; padding: 6px 9px; background: #fff6d6; border: 1px solid #f0d27a; border-radius: 6px; color: #5c3d00; }
+  .newfinds .star, .star { color: #e0a100; font-size: 15px; }
+  .newfind { margin-top: 5px; font-weight: 600; color: #7a5200; }
   .goal { margin: 4px 0 6px; color: #1f2420; }
   .steps { margin: 0; padding-left: 18px; color: #333; }
   .steps li { margin: 3px 0; }
@@ -54,6 +57,7 @@
   <h1>Where has nobody looked yet?</h1>
   <div id="panelBody">
   <div class="muted" id="intro">Loading…</div>
+  <div class="newfinds" id="newFinds"></div>
 
   <h2>Colour by</h2>
   <div class="ctl">
@@ -144,12 +148,19 @@ const PUB = D.parcelPublic, PUBNAME = D.parcelPublicName || {}, VEGPUB = D.vegPu
 const parcels = D.parcels.map(([spi, pfi, road, ha, g], i) => ({ i, spi, pfi, road, ha, shape: decodeShape(g), stats: newStats(), pub: PUB ? PUB[i] : 1 }));
 const roadsides = D.roadsides.map(([road, lengthM, ha, g], i) => ({ i, road, lengthM, ha, shape: decodeShape(g), stats: newStats() }));
 const props = D.props.map(([pfi, propnum, addrs, g]) => ({ pfi, propnum, addrs, shape: decodeShape(g) }));
+// 'New finds': parcels and roadsides whose first native understorey record was observed on or after this date
+const NEW_SINCE = '2026-07-01';
+const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 for (const o of D.obs) {
   const [, , id, , , , , kind, idx] = o;
   if (!kind) continue;
   const u = kind === 1 ? parcels[idx] : roadsides[idx];
   const t = T[id]; if (!t || !u) continue;
   const s = u.stats; s.obsCount++;
+  if (t[4] && (t[6] || (t[2] && !EXCL.has(t[2])))) {      // counts as native understorey on the map: before or since the 'new finds' date?
+    const d = o[4];
+    if (!d || d < NEW_SINCE) u.undBefore = true; else if (!u.firstNew || d < u.firstNew) u.firstNew = d;
+  }
   if (t[4] && t[2] && !EXCL.has(t[2])) s.lfs.add(t[2]);   // plant groups also count genus-level IDs
   if (!t[6]) continue;                                    // species counts need a species-level ID
   const e = s.all.get(id) || { id, n: 0 }; e.n++; s.all.set(id, e);
@@ -167,7 +178,8 @@ const topo = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/W
 
 map.createPane('species'); map.getPane('species').style.zIndex = 390;
 map.createPane('roads');   map.getPane('roads').style.zIndex = 395;
-for (const p of ['species', 'roads']) map.getPane(p).style.pointerEvents = 'none';
+map.createPane('stars');   map.getPane('stars').style.zIndex = 420;
+for (const p of ['species', 'roads', 'stars']) map.getPane(p).style.pointerEvents = 'none';
 
 // Canvas tile layers: each 256 px tile draws only the shapes that touch it, so tens of thousands
 // of polygons stay responsive (Leaflet only draws the tiles in view, and caches them while panning).
@@ -178,7 +190,7 @@ const PolyTiles = L.GridLayer.extend({
     tile.width = tile.height = 256 * r;
     // CPU-backed canvas: many small paths rasterise ~4x faster in software than on the GPU
     const ctx = tile.getContext('2d', { willReadFrequently: true }); ctx.scale(r, r); ctx.lineJoin = 'round';
-    const scale = 256 * Math.pow(2, c.z), ox = c.x * 256, oy = c.y * 256, pad = 6 / scale;
+    const scale = 256 * Math.pow(2, c.z), ox = c.x * 256, oy = c.y * 256, pad = 10 / scale;
     const tb = [ox / scale - pad, oy / scale - pad, (ox + 256) / scale + pad, (oy + 256) / scale + pad];
     this.options.draw(ctx, tb, scale, ox, oy, c.z);
     return tile;
@@ -288,6 +300,31 @@ const speciesLayer = new PolyTiles({ pane: 'species', draw: drawShapes(() => spe
 const roadItems = roadsides.map(r => ({ s: r.shape, u: r }));
 const roadsideLayer = new PolyTiles({ pane: 'roads', draw: drawShapes(() => roadItems, roadStyle) }).addTo(map);
 
+// ---------- Stars on new finds ----------
+function starPoint(u) {
+  const f = toGeoJSON(u.shape);
+  try { const c = turf.centerOfMass(f).geometry.coordinates; if (pointIn(u.shape, c[0], c[1])) return c; } catch (e) {}
+  try { return turf.pointOnFeature(f).geometry.coordinates; } catch (e) {}
+  const b = u.shape.bb; return [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2];
+}
+const newFinds = [...parcels, ...roadsides].filter(u => u.firstNew && !u.undBefore).map(u => {
+  const c = starPoint(u); return { u: (c[0] + 180) / 360, v: mercV(c[1]), unit: u, pub: u.pub ?? 1 };
+});
+function drawStar(ctx, x, y, R) {
+  ctx.beginPath();
+  for (let k = 0; k < 10; k++) { const r = k % 2 ? R * 0.45 : R, a = -Math.PI / 2 + k * Math.PI / 5; ctx.lineTo(x + r * Math.cos(a), y + r * Math.sin(a)); }
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+}
+const starLayer = new PolyTiles({ pane: 'stars', draw: (ctx, tb, scale, ox, oy) => {
+  ctx.fillStyle = '#ffc61a'; ctx.strokeStyle = '#5c3d00'; ctx.lineWidth = 1.3; ctx.globalAlpha = 1;
+  for (const s of newFinds) {
+    if (publicOnly && !s.pub) continue;
+    if (s.u < tb[0] || s.u > tb[2] || s.v < tb[1] || s.v > tb[3]) continue;
+    drawStar(ctx, s.u * scale - ox, s.v * scale - oy, 8);
+  }
+} }).addTo(map);
+const newFindHtml = u => u.firstNew && !u.undBefore ? '<div class="newfind"><span class="star">★</span> New find – first native understorey record on ' + fmtDate(u.firstNew) + '</div>' : '';
+
 L.control.layers({ 'Satellite imagery': imagery, 'Topographic (Esri)': topo}, null, { collapsed: true }).addTo(map);
 L.control.scale({ imperial: false }).addTo(map);
 
@@ -315,7 +352,8 @@ function updateLegend() {
     '<div class="key"><span class="fill" style="background:' + NO_RECORDS + '"></span><span class="gap">No records yet – a gap to explore</span></div>' +
     bins().map((b, i) =>
       '<div class="key"><span class="fill" style="background:' + COLS[i] + '"></span>' +
-      (b[1] === Infinity ? b[0] + '+' : b[0] === b[1] ? b[0] : b[0] + '–' + b[1]) + ' ' + label + '</div>').join('');
+      (b[1] === Infinity ? b[0] + '+' : b[0] === b[1] ? b[0] : b[0] + '–' + b[1]) + ' ' + label + '</div>').join('') +
+    '<div class="key"><span class="star" style="width:14px;text-align:center">★</span>New find since ' + fmtDate(NEW_SINCE) + '</div>';
 }
 
 // ---------- Popups ----------
@@ -374,13 +412,13 @@ map.on('click', e => {
   if (road) {
     html += '<h3>Roadside: ' + esc(road.road) + '</h3><table>' +
       (road.lengthM ? '<tr><td>Section length</td><td>~' + Math.round(road.lengthM / 10) * 10 + ' m</td></tr>' : '') +
-      '<tr><td>Reserve area</td><td>' + road.ha.toFixed(2) + ' ha</td></tr>' + (PUB ? '<tr><td>Land</td><td><b>Public</b> road reserve</td></tr>' : '') + statsHtml(road.stats);
+      '<tr><td>Reserve area</td><td>' + road.ha.toFixed(2) + ' ha</td></tr>' + (PUB ? '<tr><td>Land</td><td><b>Public</b> road reserve</td></tr>' : '') + statsHtml(road.stats) + newFindHtml(road);
   }
   if (parcel) {
     const vh = vegHa(parcel);
     html += '<h3>Parcel ' + esc(parcel.spi || parcel.pfi) + (parcel.road ? ' <span class="small">(road)</span>' : '') + '</h3><table>' +
       '<tr><td>Area</td><td>' + parcel.ha.toFixed(1) + ' ha</td></tr>' +
-      '<tr><td>Native veg (2005)</td><td>' + vh.toFixed(1) + ' ha (' + Math.round(100 * vh / parcel.ha) + '%)</td></tr>' + landRow(parcel) + statsHtml(parcel.stats);
+      '<tr><td>Native veg (2005)</td><td>' + vh.toFixed(1) + ' ha (' + Math.round(100 * vh / parcel.ha) + '%)</td></tr>' + landRow(parcel) + statsHtml(parcel.stats) + newFindHtml(parcel);
   }
   if (prop) {
     html += '<div class="sec"><b>Property:</b> ' + esc(prop.addrs[0] || 'No address recorded') +
@@ -404,10 +442,13 @@ document.getElementById('intro').innerHTML =
 document.getElementById('notes').innerHTML =
   '“Native veg” colours only mapped native vegetation (2005) and roadside reserves; “whole parcel” colours every parcel. Records with hidden locations aren’t shown. Data built ' + built + '.';
 buildSpeciesLayer();
+document.getElementById('newFinds').innerHTML = newFinds.length
+  ? '<span class="star">★</span> <b>' + newFinds.length + ' new patch' + (newFinds.length === 1 ? '' : 'es') + ' found since ' + fmtDate(NEW_SINCE) + '</b><br><span class="small">Parcels and roadsides where native understorey was recorded for the first time. Can you find the next one?</span>'
+  : '<span class="star">★</span> <b>No new patches yet since ' + fmtDate(NEW_SINCE) + '</b> – be the first!';
 
 document.getElementById('toggle').addEventListener('click', e => { const b = document.getElementById('panelBody'); const hide = b.style.display !== 'none'; b.style.display = hide ? 'none' : ''; e.target.textContent = hide ? 'Show' : 'Hide'; });
 if (PUB) document.getElementById('publicCtl').style.display = '';
-document.getElementById('publicOnly').addEventListener('change', e => { publicOnly = e.target.checked; buildSpeciesLayer(); });
+document.getElementById('publicOnly').addEventListener('change', e => { publicOnly = e.target.checked; buildSpeciesLayer(); starLayer.redraw(); });
 document.getElementById('countMode').addEventListener('change', e => { countMode = e.target.value; speciesLayer.redraw(); roadsideLayer.redraw(); updateLegend(); });
 document.querySelectorAll('input[name=shade]').forEach(r => r.addEventListener('change', e => { shadeMode = e.target.value; buildSpeciesLayer(); }));
 </script>
