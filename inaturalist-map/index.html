@@ -405,11 +405,25 @@ function panelPad() {
   const el = document.querySelector('.panel');
   return window.innerWidth > 600 && el && document.getElementById('panelBody').style.display !== 'none' ? el.offsetLeft + el.offsetWidth + 10 : 0;
 }
+// a click on (or right next to) a star opens the popup for the place that star belongs to – a road parcel and
+// the roadside section over it can both have stars, and otherwise the parcel would always win
+function starAt(latlng) {
+  if (!map.hasLayer(starLayer)) return null;
+  const scale = 256 * Math.pow(2, map.getZoom()), u = (latlng.lng + 180) / 360, v = mercV(latlng.lat);
+  let best = null, bd = 11 * 11;
+  for (const s of newFinds) {
+    if (publicOnly && !s.pub) continue;
+    const dx = (s.u - u) * scale, dy = (s.v - v) * scale, d = dx * dx + dy * dy;
+    if (d < bd) { bd = d; best = s; }
+  }
+  return best;
+}
 map.on('click', e => {
   const lng = e.latlng.lng, lat = e.latlng.lat;
   const hit = arr => arr.find(u => pointIn(u.shape, lng, lat));
-  const parcel = hit(parcels);
-  const road = parcel ? null : hit(roadsides);
+  const star = starAt(e.latlng), su = star && star.unit;
+  const parcel = su ? (su.spi !== undefined ? su : null) : hit(parcels);
+  const road = su ? (su.spi === undefined ? su : null) : parcel ? null : hit(roadsides);
   const prop = parcel ? hit(props) : null;
   let html = '';
   if (road) {
