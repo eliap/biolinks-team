@@ -180,6 +180,9 @@ const roadsides = D.roadsides.map(([road, lengthM, ha, g], i) => ({ i, road, len
 const props = D.props.map(([pfi, propnum, addrs, g]) => ({ pfi, propnum, addrs, shape: decodeShape(g) }));
 // 'New finds': parcels and roadsides whose first native understorey record was observed on or after this date
 const NEW_SINCE = '2026-10-01';
+// stars first found before this date are drawn faded, so the latest finds stand out
+const FADE_BEFORE = '2026-10-12';
+const prevDay = d => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() - 1); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); };
 const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 for (const o of D.obs) {
   const [, , id, , , , , kind, idx] = o;
@@ -349,18 +352,19 @@ function starPoint(u) {
   const b = u.shape.bb; return [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2];
 }
 const newFinds = [...shownParcels, ...roadsides].filter(u => u.firstNew && !u.undBefore).map(u => {
-  const c = starPoint(u); return { u: (c[0] + 180) / 360, v: mercV(c[1]), unit: u, pub: u.pub ?? 1 };
-});
+  const c = starPoint(u); return { u: (c[0] + 180) / 360, v: mercV(c[1]), unit: u, pub: u.pub ?? 1, faded: u.firstNew < FADE_BEFORE };
+}).sort((a, b) => b.faded - a.faded);   // faded ones drawn underneath
 function drawStar(ctx, x, y, R) {
   ctx.beginPath();
   for (let k = 0; k < 10; k++) { const r = k % 2 ? R * 0.45 : R, a = -Math.PI / 2 + k * Math.PI / 5; ctx.lineTo(x + r * Math.cos(a), y + r * Math.sin(a)); }
   ctx.closePath(); ctx.fill(); ctx.stroke();
 }
 const starLayer = new PolyTiles({ pane: 'stars', draw: (ctx, tb, scale, ox, oy) => {
-  ctx.fillStyle = '#ffc61a'; ctx.strokeStyle = '#5c3d00'; ctx.lineWidth = 1.3; ctx.globalAlpha = 1;
+  ctx.fillStyle = '#ffc61a'; ctx.strokeStyle = '#5c3d00'; ctx.lineWidth = 1.3;
   for (const s of newFinds) {
     if (publicOnly && !s.pub) continue;
     if (s.u < tb[0] || s.u > tb[2] || s.v < tb[1] || s.v > tb[3]) continue;
+    ctx.globalAlpha = s.faded ? 0.3 : 1;
     drawStar(ctx, s.u * scale - ox, s.v * scale - oy, 8);
   }
 } }).addTo(map);
@@ -433,7 +437,8 @@ function updateLegend() {
     bins().map((b, i) =>
       '<div class="key"><span class="fill" style="background:' + COLS[i] + '"></span>' +
       (b[1] === Infinity ? b[0] + '+' : b[0] === b[1] ? b[0] : b[0] + '–' + b[1]) + ' ' + label + '</div>').join('') +
-    '<div class="key"><span class="star" style="width:14px;text-align:center">★</span>New find since ' + fmtDate(NEW_SINCE) + '</div>';
+    '<div class="key"><span class="star" style="width:14px;text-align:center">★</span>New find since ' + fmtDate(NEW_SINCE) + '</div>' +
+    '<div class="key"><span class="star" style="width:14px;text-align:center;opacity:0.3">★</span>Found ' + fmtDate(NEW_SINCE) + ' – ' + fmtDate(prevDay(FADE_BEFORE)) + '</div>';
 }
 
 // ---------- Popups ----------
