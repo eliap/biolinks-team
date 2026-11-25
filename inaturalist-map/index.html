@@ -180,9 +180,9 @@ const roadsides = D.roadsides.map(([road, lengthM, ha, g], i) => ({ i, road, len
 const props = D.props.map(([pfi, propnum, addrs, g]) => ({ pfi, propnum, addrs, shape: decodeShape(g) }));
 // 'New finds': parcels and roadsides whose first native understorey record was observed on or after this date
 const NEW_SINCE = '2026-10-01';
-// stars first found before this date are drawn faded, so the latest finds stand out
-const FADE_BEFORE = '2026-10-12';
-const prevDay = d => { const x = new Date(d + 'T00:00:00'); x.setDate(x.getDate() - 1); return x.getFullYear() + '-' + String(x.getMonth() + 1).padStart(2, '0') + '-' + String(x.getDate()).padStart(2, '0'); };
+// Spring blitz 2026 final tally (records to 25 Nov 2026): iNaturalist users whose record was a star's first native
+// understorey record (worked out from the local iNat cache – usernames aren't in the published data files)
+const BLITZ = { people: { 'upper-wimmera': 55, 'upper-hopkins': 16, 'upper-mount-emu': 25 }, allPatches: 185, allPeople: 89 };
 const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
 for (const o of D.obs) {
   const [, , id, , , , , kind, idx] = o;
@@ -352,19 +352,18 @@ function starPoint(u) {
   const b = u.shape.bb; return [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2];
 }
 const newFinds = [...shownParcels, ...roadsides].filter(u => u.firstNew && !u.undBefore).map(u => {
-  const c = starPoint(u); return { u: (c[0] + 180) / 360, v: mercV(c[1]), unit: u, pub: u.pub ?? 1, faded: u.firstNew < FADE_BEFORE };
-}).sort((a, b) => b.faded - a.faded);   // faded ones drawn underneath
+  const c = starPoint(u); return { u: (c[0] + 180) / 360, v: mercV(c[1]), unit: u, pub: u.pub ?? 1 };
+});
 function drawStar(ctx, x, y, R) {
   ctx.beginPath();
   for (let k = 0; k < 10; k++) { const r = k % 2 ? R * 0.45 : R, a = -Math.PI / 2 + k * Math.PI / 5; ctx.lineTo(x + r * Math.cos(a), y + r * Math.sin(a)); }
   ctx.closePath(); ctx.fill(); ctx.stroke();
 }
 const starLayer = new PolyTiles({ pane: 'stars', draw: (ctx, tb, scale, ox, oy) => {
-  ctx.fillStyle = '#ffc61a'; ctx.strokeStyle = '#5c3d00'; ctx.lineWidth = 1.3;
+  ctx.fillStyle = '#ffc61a'; ctx.strokeStyle = '#5c3d00'; ctx.lineWidth = 1.3; ctx.globalAlpha = 1;
   for (const s of newFinds) {
     if (publicOnly && !s.pub) continue;
     if (s.u < tb[0] || s.u > tb[2] || s.v < tb[1] || s.v > tb[3]) continue;
-    ctx.globalAlpha = s.faded ? 0.3 : 1;
     drawStar(ctx, s.u * scale - ox, s.v * scale - oy, 8);
   }
 } }).addTo(map);
@@ -437,8 +436,7 @@ function updateLegend() {
     bins().map((b, i) =>
       '<div class="key"><span class="fill" style="background:' + COLS[i] + '"></span>' +
       (b[1] === Infinity ? b[0] + '+' : b[0] === b[1] ? b[0] : b[0] + '–' + b[1]) + ' ' + label + '</div>').join('') +
-    '<div class="key"><span class="star" style="width:14px;text-align:center">★</span>New find since ' + fmtDate(NEW_SINCE) + '</div>' +
-    '<div class="key"><span class="star" style="width:14px;text-align:center;opacity:0.3">★</span>Found ' + fmtDate(NEW_SINCE) + ' – ' + fmtDate(prevDay(FADE_BEFORE)) + '</div>';
+    '<div class="key"><span class="star" style="width:14px;text-align:center">★</span>New find since ' + fmtDate(NEW_SINCE) + '</div>';
 }
 
 // ---------- Popups ----------
@@ -559,7 +557,8 @@ document.getElementById('notes').innerHTML =
   '“Native veg” colours only mapped native vegetation (2005) and roadside reserves; “whole parcel” colours every parcel. Records with hidden locations aren’t shown, and records with only a rough location (GPS worse than 200 m) aren’t counted in the colours – turn on the record dots to see them faded. Data built ' + built + '.';
 buildSpeciesLayer();
 document.getElementById('newFinds').innerHTML = newFinds.length
-  ? '<span class="star">★</span> <b>' + newFinds.length + ' new patch' + (newFinds.length === 1 ? '' : 'es') + ' found since ' + fmtDate(NEW_SINCE) + '</b><br><span class="small">Parcels and roadsides where native understorey was recorded for the first time. Can you find the next one?</span>'
+  ? '<span class="star">★</span> <b>' + newFinds.length + ' new patch' + (newFinds.length === 1 ? '' : 'es') + ' found' + (BLITZ.people[REGION] ? ' by ' + BLITZ.people[REGION] + ' people' : '') + ' since ' + fmtDate(NEW_SINCE) + '</b>' +
+    '<br><span class="small"><b>Spring blitz 2026 final tally:</b> ' + BLITZ.allPatches + ' new patches found by ' + BLITZ.allPeople + ' people across all three regions. Parcels and roadsides where native understorey was recorded for the first time.</span>'
   : '<span class="star">★</span> <b>No new patches yet since ' + fmtDate(NEW_SINCE) + '</b> – be the first!';
 
 const regionSel = document.getElementById('regionSel');
